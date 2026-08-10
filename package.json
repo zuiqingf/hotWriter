@@ -1,0 +1,41 @@
+{
+  "name": "hotwriter",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "NODE_OPTIONS=\"--experimental-sqlite\" next dev",
+    "build": "NODE_OPTIONS=\"--experimental-sqlite\" next build",
+    "start": "NODE_OPTIONS=\"--experimental-sqlite\" next start",
+    "lint": "next lint",
+    "db:migrate": "NODE_OPTIONS=\"--experimental-sqlite\" tsx src/lib/db/migrate.ts",
+    "db:reset": "rm -f data/hotwriter.db && NODE_OPTIONS=\"--experimental-sqlite\" tsx src/lib/db/migrate.ts"
+  },
+  "dependencies": {
+    "@tiptap/extension-bubble-menu": "^2.27.2",
+    "@tiptap/extension-floating-menu": "^2.27.2",
+    "@tiptap/extension-image": "^2.27.2",
+    "@tiptap/extension-link": "^2.27.2",
+    "@tiptap/extension-placeholder": "^2.27.2",
+    "@tiptap/pm": "^2.27.2",
+    "@tiptap/react": "^2.27.2",
+    "@tiptap/starter-kit": "^2.27.2",
+    "@tiptap/suggestion": "^2.27.2",
+    "marked": "^14.1.4",
+    "next": "14.2.18",
+    "openai": "^4.73.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "turndown": "^7.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "critters": "^0.0.23",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.16",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,42 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+build/
+
+# environment
+.env
+.env.local
+.env*.local
+
+# database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+data/*.db*
+
+# uploads (user-generated content)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# logs
+*.log
+npm-debug.log*
+
+# os
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+*.swp
+
+# misc
+.turbo
+coverage/
+*.tsbuildinfo

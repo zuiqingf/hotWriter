@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family:
+      Inter,
+      -apple-system,
+      BlinkMacSystemFont,
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg text-sm font-medium transition;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+  }
+
+  .btn-secondary {
+    @apply btn border border-gray-200 text-gray-700 hover:bg-gray-50;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-700 hover:bg-gray-100;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+
+  .card {
+    @apply bg-white border border-gray-200 rounded-xl;
+  }
+
+  /* 写作编辑器：衬线字体，长文舒适 */
+  .prose-textarea {
+    font-family:
+      "Source Serif Pro",
+      "Noto Serif SC",
+      "Songti SC",
+      Georgia,
+      serif;
+    font-size: 17px;
+    line-height: 1.85;
+    letter-spacing: 0.01em;
+  }
+
+  /* 自动写入时：editor 区显示"AI 正在写"叠层效果 */
+  .editor-busy {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(238, 242, 255, 0.6) 0%,
+        rgba(255, 255, 255, 0) 30%
+      );
+    transition: background 0.5s ease;
+  }
+
+  /* 极淡的顶部进度条（自动写时显示） */
+  .top-progress {
+    background: linear-gradient(
+      90deg,
+      #6366f1 0%,
+      #8b5cf6 50%,
+      #a855f7 100%
+    );
+    background-size: 200% 100%;
+    animation: progress-shimmer 2s linear infinite;
+  }
+
+  @keyframes progress-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+
+  /* AI 气泡阴影 */
+  .ai-msg-user {
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .ai-msg-assistant {
+    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.15);
+  }
+
+  /* 渐变文字（用于 status 文案） */
+  .text-gradient {
+    background: linear-gradient(135deg, #4f46e5 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* 选区颜色：紫色调 */
+::selection {
+  background: rgba(99, 102, 241, 0.18);
+}
+
+/* Toast 淡入动画 */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.toast-in {
+  animation: toast-in 0.18s ease-out;
+}
