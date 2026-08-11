@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function LibraryPage() {
   let allArticles: any[] = [];
   try {
-    allArticles = db.all(
+    allArticles = await db.all(
       "SELECT * FROM articles WHERE status != 'deleted' ORDER BY updated_at DESC"
     );
   } catch (err) {

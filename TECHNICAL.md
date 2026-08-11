@@ -52,7 +52,7 @@ HotWriter 是一个**非商业、个人用**的 PC Web 应用，帮用户基于"
 | **UI** | React 18.3 + Tailwind 3.4 | 极简 className 体系 |
 | **LLM** | DeepSeek API（OpenAI 兼容）| 国产、价格低、中文好 |
 | **搜索** | Tavily API | AI 友好的网页搜索 |
-| **数据库** | node:sqlite（Node 22 内置） | 零依赖、单文件、本地用 |
+| **数据库** | MySQL 8.0（mysql2/promise 连接池） | 与 OnePlatform 共用实例 `47.111.1.180:3306`、阿里云 RDS 同款、个人项目无需再起 SQLite 进程 |
 | **编辑器** | Tiptap 2.10（基于 ProseMirror）| 框架成熟、扩展丰富 |
 | **MD ↔ HTML** | marked 14 + turndown 7 | marked 转 HTML（写入）、turndown 转 MD（导出）|
 | **拖动** | 浏览器原生 Pointer Events | 0 依赖 |
@@ -85,10 +85,12 @@ HotWriter 是一个**非商业、个人用**的 PC Web 应用，帮用户基于"
 
 ```
 hotwriter/
-├── data/
-│   └── hotwriter.db              # SQLite 数据库（自动创建）
 ├── public/
 │   └── uploads/                  # 用户上传图片（按 YYYYMM 分目录）
+├── scripts/
+│   └── deploy.sh                 # 一键 Docker 部署到 180（本地 tar → scp → 远程 build+run）
+├── Dockerfile                    # next start 模式（node:20-alpine 两阶段）
+├── .dockerignore
 ├── src/
 │   ├── app/
 │   │   ├── api/                  # 后端 API Routes
@@ -120,9 +122,13 @@ hotwriter/
 │   │   ├── markdown.ts           # MD ↔ HTML 转换
 │   │   └── utils.ts              # 时间格式化、字数统计等
 │   └── middleware.ts             # （空，预留）
+├── Dockerfile                    # 多阶段构建：builder 跑 next build，runner 跑 next start
+├── .dockerignore
+├── scripts/
+│   └── deploy.sh                 # 一键部署到 47.111.1.180
 ├── package.json
 ├── tailwind.config.ts
-├── next.config.js
+├── next.config.js                # basePath: "/hotwriter"
 └── tsconfig.json
 ```
 
@@ -279,19 +285,27 @@ const [thepaper, toutiao, baidu, douyin] = await Promise.all([
 
 ### 4.6 数据库封装（[src/lib/db/index.ts](src/lib/db/index.ts)）
 
-`node:sqlite` 极简封装：
+基于 `mysql2/promise` 的极简异步封装，对外提供与原 SQLite 版本同名的 `all/get/run/close` 接口（业务层无须感知方言差异）：
 
 ```ts
 const db = {
-  all<T>(sql, params): T[],          // SELECT 多行
-  get<T>(sql, params): T | undefined, // SELECT 单行
-  run(sql, params): { changes, lastInsertRowid }, // INSERT/UPDATE/DELETE
+  all<T>(sql, params): Promise<T[]>,            // SELECT 多行
+  get<T>(sql, params): Promise<T | undefined>,  // SELECT 单行
+  run(sql, params): Promise<{ changes, lastInsertRowid }>, // INSERT/UPDATE/DELETE
+  close(): Promise<void>,
 };
 ```
 
-**Singleton**：用 `globalThis._db` 防止 Next.js dev 热重载多连接。
+**连接池**：用 `mysql2.createPool` 单例（`globalThis._mysqlPool` 防止 Next.js dev 热重载多池）。每次 `all/get/run` 从池里 `getConnection()` → 执行 → `release()`，避免长连接断开。
 
-**迁移策略**：`CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ... ADD COLUMN`（用 try/catch 兼容旧库）。
+**返回值映射**：`mysql2` 的 INSERT/UPDATE/DELETE 返回 `ResultSetHeader`，这里把 `affectedRows` 映射成 `changes`、`insertId` 映射成 `lastInsertRowid`，让 30+ 处旧调用站点继续工作（无需 diff 改造）。
+
+**自动建库建表**：`ensureDatabaseAndSchema()` 在每次 `dbReady()` 时执行（应用启动第一次访问数据库时触发），包含：
+- `CREATE DATABASE IF NOT EXISTS db_hotwriter`
+- `CREATE TABLE IF NOT EXISTS` × 6
+- `CREATE INDEX` —— 注意 180 上的 MySQL 是阿里云分支，不支持 `CREATE INDEX IF NOT EXISTS`，因此用 try/catch + `ER_DUP_KEYNAME (1061)` 错误码忽略重复创建。
+
+**密码特殊字符**：`DATABASE_URL` 中如果密码含 `#` 等保留字，必须 URL-encode（`#` → `%23`），否则会被解析为 fragment 截断。
 
 ---
 
@@ -351,97 +365,124 @@ write page loadArticle() → fetch /api/articles/[id]
 
 ## 6. 数据库 schema
 
-`articles` / `article_versions` / `chat_messages` / `research_sessions` / `hot_topics` / `usage_logs` 共 6 张表。
+数据库：MySQL 8.0（实例 `47.111.1.180:3306`，库名 `db_hotwriter`，与 OnePlatform 共用实例）。
+完整 DDL 在 [src/lib/db/schema.ts](src/lib/db/schema.ts)。共 6 张表：`articles` / `article_versions` / `chat_messages` / `research_sessions` / `hot_topics` / `usage_logs`。
 
 ### articles
 
 ```sql
 CREATE TABLE articles (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  content TEXT DEFAULT '',         -- HTML（Markdown 旧数据加载时 on-the-fly 转）
-  source_type TEXT,                -- 'hot' | 'keyword'
-  source_ref TEXT,                 -- 关键词 或 热点 URL
-  direction_index INTEGER,
-  style TEXT,                       -- '深度观点' | '科普' | '故事' | '短评'
-  series_id INTEGER,                -- 预留：系列文
-  word_count INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'draft',      -- 'draft' | 'archived' | 'deleted'
-  tags TEXT,                        -- JSON array
-  metadata TEXT,                    -- JSON {sourceUrl, ...}
-  user_id INTEGER DEFAULT 1,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  uuid VARCHAR(64) NOT NULL UNIQUE,
+  title VARCHAR(500) NOT NULL,
+  content LONGTEXT DEFAULT '',       -- HTML（Markdown 旧数据加载时 on-the-fly 转）
+  source_type VARCHAR(32),           -- 'hot' | 'keyword'
+  source_ref VARCHAR(500),           -- 关键词 或 热点 URL
+  direction_index INT,
+  style VARCHAR(32),                 -- '深度观点' | '科普' | '故事' | '短评'
+  series_id INT,                     -- 预留：系列文
+  word_count INT DEFAULT 0,
+  status VARCHAR(16) DEFAULT 'draft',-- 'draft' | 'archived' | 'deleted'
+  tags TEXT,                         -- JSON array
+  metadata TEXT,                     -- JSON {sourceUrl, ...}
+  user_id INT DEFAULT 1,
+  source_url VARCHAR(500),           -- 文章级 sourceUrl（防幻觉透传）
+  created_at INT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  updated_at INT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  INDEX idx_articles_status_created (status, created_at),
+  INDEX idx_articles_user (user_id),
+  INDEX idx_articles_source (source_type, source_ref)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+### article_versions
+
+```sql
+CREATE TABLE article_versions (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  article_id INT NOT NULL,
+  content LONGTEXT NOT NULL,
+  word_count INT DEFAULT 0,
+  note VARCHAR(200),
+  created_at INT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  INDEX idx_versions_article (article_id, created_at),
+  CONSTRAINT fk_versions_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 ### research_sessions
 
 ```sql
 CREATE TABLE research_sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  keyword TEXT NOT NULL,
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  keyword VARCHAR(200) NOT NULL,
   user_input TEXT,
-  research_log TEXT,                -- JSON: AgentStep[] (用于事后调试)
-  directions TEXT,                 -- JSON: Direction[]
-  article_id INTEGER REFERENCES articles(id) ON DELETE SET NULL,
-  chosen_direction INTEGER,
-  total_cost_cny TEXT,
-  tool_call_count INTEGER DEFAULT 0,
-  model TEXT,
-  source_url TEXT,                  -- 原文 URL（防幻觉用）
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
+  research_log LONGTEXT,             -- JSON: AgentStep[] (用于事后调试)
+  directions LONGTEXT,               -- JSON: Direction[]
+  article_id INT,
+  chosen_direction INT,
+  total_cost_cny VARCHAR(32),
+  tool_call_count INT DEFAULT 0,
+  model VARCHAR(64),
+  source_url VARCHAR(500),           -- 原文 URL（防幻觉用）
+  created_at INT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  INDEX idx_sessions_created (created_at),
+  CONSTRAINT fk_sessions_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 ### chat_messages
 
 ```sql
 CREATE TABLE chat_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-  role TEXT NOT NULL,                -- 'user' | 'assistant' | 'event' | 'system'
-  content TEXT NOT NULL,
-  tokens_used INTEGER,
-  cost_cny TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  article_id INT NOT NULL,
+  role VARCHAR(16) NOT NULL,         -- 'user' | 'assistant' | 'event' | 'system'
+  content LONGTEXT NOT NULL,
+  tokens_used INT,
+  cost_cny VARCHAR(32),
+  created_at INT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  INDEX idx_messages_article (article_id, created_at),
+  CONSTRAINT fk_messages_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 ### hot_topics
 
 ```sql
 CREATE TABLE hot_topics (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  source TEXT NOT NULL,              -- 'thepaper' | 'toutiao' | 'baidu' | 'douyin'
-  url TEXT,
-  external_id TEXT,
-  hot_score INTEGER,
-  category TEXT,
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  title VARCHAR(200) NOT NULL,
+  source VARCHAR(32) NOT NULL,       -- 'thepaper' | 'toutiao' | 'baidu' | 'douyin'
+  url VARCHAR(500),
+  external_id VARCHAR(128),
+  hot_score INT,
+  category VARCHAR(64),
   summary TEXT,
-  event_group_id TEXT,
-  fetched_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  expired_at INTEGER
-);
+  event_group_id VARCHAR(64),
+  fetched_at INT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  expired_at INT,
+  UNIQUE KEY uk_hot_external (source, external_id),
+  INDEX idx_hot_fetched (fetched_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 ### usage_logs
 
 ```sql
 CREATE TABLE usage_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  action TEXT NOT NULL,              -- 'research' | 'write' | 'ai_edit' | 'check_compliance'
-  model TEXT,
-  tokens_input INTEGER,
-  tokens_output INTEGER,
-  cost_cny TEXT,
-  duration_ms INTEGER,
-  article_id INTEGER,
-  session_id INTEGER,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  action VARCHAR(32) NOT NULL,       -- 'research' | 'write' | 'ai_edit' | 'check_compliance'
+  model VARCHAR(64),
+  tokens_input INT,
+  tokens_output INT,
+  cost_cny VARCHAR(32),
+  duration_ms INT,
+  article_id INT,
+  session_id INT,
+  created_at INT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  INDEX idx_usage_action_created (action, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 ---
@@ -505,43 +546,117 @@ CREATE TABLE usage_logs (
 
 ### 8.1 环境要求
 
-- Node.js 22+（`node:sqlite` 需要）
-- Tavily API Key（可选，无 key 降级到 LLM 自有知识）
+**本地开发**：
+- Node.js 20+（生产用 Docker alpine 镜像；本地 22 也可）
+- 可达的 MySQL 8.0+ 实例（默认连 OnePlatform 的 `47.111.1.180:3306`）
 - DeepSeek API Key（**必填**）
+- Tavily API Key（可选，无则降级到 LLM 自有知识）
+
+**生产部署**：
+- 180 服务器（`47.111.1.180`）已具备：Docker 25+、原生 nginx 1.22、MySQL 8.0（阿里云分支）
+- 端口 3010 空闲（3000 被 `miaoxiang` 容器占用）
+- `/root/hotwriter/` 作为部署目录（uploads 持久化挂载）
 
 ### 8.2 环境变量
 
 ```bash
 # .env
-DEEPSEEK_API_KEY=sk-xxxxxxxxxx
-TAVILY_API_KEY=tvly-xxxxxxxxxx
-# DATABASE_URL=file:./data/hotwriter.db   # 可选，默认在 ./data/
+DEEPSEEK_API_KEY=sk-xxxxxxxxxx       # 必填
+TAVILY_API_KEY=tvly-xxxxxxxxxx       # 可选
+DATABASE_URL=mysql://USER:PASSWORD@HOST:3306/db_hotwriter?charset=utf8mb4
+NEXT_PUBLIC_BASE_PATH=/hotwriter     # build 时注入（NEXT_PUBLIC_* 会内联到客户端 bundle）
+NODE_ENV=production                  # 生产环境必加
 ```
 
-### 8.3 命令
+> ⚠️ **密码特殊字符**：含 `#`、`@`、`/` 等保留字必须 URL-encode，否则 URL fragment 会被截断。例如密码 `p@ss#word/` → `p%40ss%23word%2F`。`scripts/deploy.sh` 会自动处理（`HOTWRITER_DB_PASSWORD` 给明文即可）。
+
+> ⚠️ **NEXT_PUBLIC_* 必须在 build 时注入**：`NEXT_PUBLIC_BASE_PATH` 会被内联到客户端 bundle，运行时改无效。Dockerfile 在 `npm run build` 之前 `ENV NEXT_PUBLIC_BASE_PATH=/hotwriter` 保证注入。
+
+> ⚠️ **容器视角的 DATABASE_URL**：容器用 `--network host` 模式时，host 写 `127.0.0.1`（容器看到的 localhost = 宿主）；不用 `--network host` 时改写 `host.docker.internal` 或宿主内网 IP。
+
+### 8.3 本地开发命令
 
 ```bash
 # 安装依赖
 npm install
 
-# 数据库初始化（首次）
-npm run db:migrate
-
 # 开发
-npm run dev          # http://localhost:3000
+npm run dev          # http://localhost:3000/hotwriter
 
-# 构建 + 启动
-npm run build
-npm start
+# 类型检查
+npx tsc --noEmit
 ```
 
-### 8.4 端口冲突
+数据库 schema 在应用首次启动时自动建库 + 建表（`ensureDatabaseAndSchema()` 触发），**无需手动 migrate**。
 
-如果 3000-3004 都被占用，dev 会自动跳到 3005+。建议：
+### 8.4 生产部署（Docker 一键脚本）
 
 ```bash
-PORT=4000 npm run dev
+# 必填：本地 export 两个密钥（不入 git；可放进 ~/.bashrc）
+export HOTWRITER_DEEPSEEK_KEY=sk-xxxxxxxxxx
+export HOTWRITER_DB_PASSWORD='<your-mysql-password>'   # 明文，脚本会自动 URL-encode
+# 可选：export HOTWRITER_TAVILY_KEY=tvly-xxxxx
+
+bash scripts/deploy.sh
 ```
+
+脚本流程（详见 [scripts/deploy.sh](scripts/deploy.sh)）：
+
+1. 检查 `HOTWRITER_DEEPSEEK_KEY` / `HOTWRITER_DB_PASSWORD` 是否已 export（缺失则 fail-fast）
+2. URL-encode 数据库密码（处理 `# @ / : ? & + =` 等保留字符）
+3. 本地 tar 打包源码（排除 `node_modules`、`.next`、`.git`、本地 `.env`、临时调试脚本）
+4. 本地构造运行时 `.env`（含已 encode 的密码）→ scp 到 `180:/root/hotwriter/.env`
+5. scp 源码包 → SSH 远程执行：
+   - 清理 `/root/hotwriter/`（保留 uploads/、备份旧 SQLite 文件以防回滚）
+   - 解压新源码
+   - 停旧容器 + 把旧 image 重 tag 为 `hotwriter:rollback`（保留一份回滚镜像）
+   - `docker build -t hotwriter:latest .` → `docker run -d --name hotwriter --restart unless-stopped --network host -e PORT=3010 --env-file .env -v /root/hotwriter/uploads:/app/public/uploads hotwriter:latest`
+6. 等 8 秒 → 看启动日志
+7. `curl` 验证容器内 API
+
+> 🔐 密钥只在两个地方存在：你本地 shell 环境 + 服务器上的 `/root/hotwriter/.env`（建议 `chmod 600`）。**永远不入 git**。
+
+### 8.5 nginx 反代（180 原生 nginx）
+
+在 `/usr/local/nginx/conf/nginx.conf` 的 `www.gydblog.com`（443 ssl）server 块内：
+
+```nginx
+# hotWriter：Next.js SSR + SSE。注意 location 末尾无斜杠——
+# 带斜杠会触发 nginx 的"目录自动 301"，与 Next.js trailingSlash=false 的 308 形成重定向死循环。
+location /hotwriter {
+    proxy_pass http://127.0.0.1:3010;   # 末尾无斜杠，保留 /hotwriter 前缀传给 Next.js basePath
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # SSE 友好（research / chat / auto-write 流式输出必需）
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+
+    # 图片上传（编辑器拖拽/粘贴，上限 5MB）
+    client_max_body_size 20m;
+}
+```
+
+外部访问：**https://www.gydblog.com/hotwriter**
+
+修改后 `/usr/local/nginx/sbin/nginx -t && /usr/local/nginx/sbin/nginx -s reload`。
+
+### 8.6 关键路径踩坑（不再犯）
+
+| 陷阱 | 表现 | 解法 |
+|------|------|------|
+| **nginx location 带尾斜杠** | `/hotwriter` ↔ `/hotwriter/` 301 ↔ 308 死循环 | `location /hotwriter` 末尾**不加斜杠**，前缀匹配同时覆盖 `/hotwriter` 与 `/hotwriter/*` |
+| **proxy_pass 末尾加斜杠** | Next.js 收到剥掉前缀的 `/`，全站 404 | `proxy_pass http://127.0.0.1:3010;` 末尾**无斜杠**（保留 `/hotwriter/` 前缀给 basePath）|
+| **漏 proxy_buffering off** | SSE 卡顿/断流，前端 EventSource 等到 timeout | 必须显式 `proxy_buffering off; proxy_http_version 1.1; proxy_set_header Connection "";` |
+| **NEXT_PUBLIC_BASE_PATH 运行时改** | 客户端 `<Link>` 指向错误路径 | 必须在 `docker build` 阶段 `ENV NEXT_PUBLIC_BASE_PATH=/hotwriter`，build 时内联 |
+| **容器 DATABASE_URL host 写错** | 容器内连不上 MySQL | `--network host` 模式下 host 写 `127.0.0.1`（不是 `47.111.1.180`）|
+| **密码 `#` 没 URL-encode** | URL fragment 截断，连接串断成 `mysql://root:` | `#` → `%23`，所有 URL 保留字符同理 |
 
 ---
 
@@ -562,6 +677,10 @@ PORT=4000 npm run dev
 | 复制按钮丢失格式 | `replace(/<[^>]+>/g, "")` 剥光 HTML | 双格式 ClipboardItem（HTML + text）|
 | 下载按钮丢失格式 | 同上 | turndown 转换 |
 | 气泡菜单按钮文字断行 | 容器宽度限制 + `flex-wrap` | `whitespace-nowrap shrink-0` |
+| 阿里云 MySQL 分支不支持 `CREATE INDEX IF NOT EXISTS` | 部署后 `ensureSchema` 报语法错 | 改用裸 `CREATE INDEX` + try/catch 忽略 `ER_DUP_KEYNAME (1061)` |
+| 热门"一键写" 404 | `<a href="/research">` 不走 Next.js basePath | 改用 `<Link>` 组件，自动拼 `/hotwriter/research` |
+| 生产 `/hotwriter` 重定向多次（ERR_TOO_MANY_REDIRECTS）| nginx `location /hotwriter/`（带斜杠）触发自动目录 301 + Next.js trailingSlash=false 308 → 死循环 | `location /hotwriter`（**无尾斜杠**），同时覆盖 `/hotwriter` 与 `/hotwriter/*` |
+| `mysql2` 连接池长连接断开 | 阿里云 wait_timeout 默认 8h，但偶发 idle disconnect | 池配置 `enableKeepAlive: true`，每次 `getConnection()` 后立即用完 `release()` |
 
 ---
 
@@ -573,7 +692,7 @@ PORT=4000 npm run dev
 | AI 单次改写 | 选区 ≤ 5000 字 | 后端硬限制 |
 | 调研会话 | 8 轮工具调用 | MAX_ROUNDS |
 | 历史热点 | 200 条 / 平台 | 24h 去重 |
-| 数据库 | SQLite 单文件 | 适合个人，不适合多人 |
+| 数据库 | MySQL 8.0 远端实例 | 与 OnePlatform 共用 `47.111.1.180:3306` |
 | 并发 | 单进程 Next.js | 适合个人用 |
 
 ---
@@ -593,12 +712,31 @@ PORT=4000 npm run dev
 ## 附录：常用脚本
 
 ```bash
-# 看数据库
-sqlite3 data/hotwriter.db "SELECT id, title, word_count FROM articles ORDER BY updated_at DESC LIMIT 5;"
+# 进入 180 MySQL
+mysql -h 47.111.1.180 -uroot -p db_hotwriter
+
+# 看最近文章
+mysql -h 47.111.1.180 -uroot -p db_hotwriter \
+  -e "SELECT id, title, word_count, status, FROM_UNIXTIME(updated_at) FROM articles ORDER BY updated_at DESC LIMIT 5;"
 
 # 看用量统计
-sqlite3 data/hotwriter.db "SELECT action, COUNT(*), SUM(cost_cny) FROM usage_logs GROUP BY action;"
+mysql -h 47.111.1.180 -uroot -p db_hotwriter \
+  -e "SELECT action, COUNT(*) AS cnt, SUM(cost_cny) AS cost FROM usage_logs GROUP BY action;"
 
 # 看最近调研
-sqlite3 data/hotwriter.db "SELECT id, keyword, total_cost_cny, tool_call_count FROM research_sessions ORDER BY created_at DESC LIMIT 5;"
+mysql -h 47.111.1.180 -uroot -p db_hotwriter \
+  -e "SELECT id, keyword, total_cost_cny, tool_call_count, FROM_UNIXTIME(created_at) FROM research_sessions ORDER BY created_at DESC LIMIT 5;"
+
+# 备份全库
+mysqldump -h 47.111.1.180 -uroot -p db_hotwriter > backup.sql
+
+# 服务器上查容器日志
+ssh -i ~/.ssh/id_gyd root@47.111.1.180 "docker logs hotwriter --tail 100 -f"
+
+# 重启容器
+ssh -i ~/.ssh/id_gyd root@47.111.1.180 "docker restart hotwriter"
+
+# 回滚到上一版 image（deploy.sh 已保留 hotwriter:rollback）
+ssh -i ~/.ssh/id_gyd root@47.111.1.180 \
+  "docker rm -f hotwriter && docker tag hotwriter:rollback hotwriter:latest && docker run -d --name hotwriter --restart unless-stopped --network host -e PORT=3010 --env-file /root/hotwriter/.env -v /root/hotwriter/uploads:/app/public/uploads hotwriter:latest"
 ```

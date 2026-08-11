@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         });
 
         // 保存会话
-        const r = db.run(
+        const r = await db.run(
           `INSERT INTO research_sessions
            (keyword, user_input, research_log, directions, total_cost_cny, tool_call_count, model, source_url)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

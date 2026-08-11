@@ -36,7 +36,7 @@ export async function getMonthlyCost(): Promise<number> {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startTs = Math.floor(startOfMonth.getTime() / 1000);
 
-    const rows = db.all(
+    const rows = await db.all(
       "SELECT cost_cny FROM usage_logs WHERE created_at >= ?",
       [startTs]
     );
@@ -59,7 +59,7 @@ export async function logUsage(params: {
   sessionId?: number;
 }) {
   try {
-    db.run(
+    await db.run(
       `INSERT INTO usage_logs
        (action, model, tokens_input, tokens_output, cost_cny, duration_ms, article_id, session_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

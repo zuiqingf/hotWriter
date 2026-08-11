@@ -21,11 +21,9 @@ export default async function HomePage() {
   // ========== 并行：拉热点 + 拉最近文章 ==========
   const [hotResult, articlesResult] = await Promise.allSettled([
     fetchAllHotTopics().catch(() => EMPTY_HOT),
-    Promise.resolve(
-      safeQuery(() =>
-        db.all(
-          "SELECT * FROM articles WHERE status IN ('draft','archived') ORDER BY updated_at DESC LIMIT 5"
-        )
+    safeQuery(() =>
+      db.all(
+        "SELECT * FROM articles WHERE status IN ('draft','archived') ORDER BY updated_at DESC LIMIT 5"
       )
     ),
   ]);
@@ -37,7 +35,7 @@ export default async function HomePage() {
   // 从 research_sessions 提取历史搜索关键词（按最近时间）
   let historyKeywords: string[] = [];
   try {
-    const rows = db.all<{ keyword: string; last_used: number }>(
+    const rows = await db.all<{ keyword: string; last_used: number }>(
       `SELECT keyword, MAX(created_at) as last_used
        FROM research_sessions
        GROUP BY keyword
@@ -110,9 +108,9 @@ export default async function HomePage() {
 }
 
 // 用 try/catch 包一层，避免冷启动时 DB 报错炸掉整个页面
-function safeQuery<T>(fn: () => T): T {
+async function safeQuery<T>(fn: () => Promise<T>): Promise<T> {
   try {
-    return fn();
+    return await fn();
   } catch (err) {
     console.warn("查询失败（首次运行数据库可能未初始化）:", err);
     return [] as any;

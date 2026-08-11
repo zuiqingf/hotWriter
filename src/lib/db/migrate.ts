@@ -1,16 +1,19 @@
 /**
  * 数据库初始化脚本
- * v0.1 用 Node 22+ 内置 sqlite，无需 drizzle migrations
+ * 触发 ensureDatabaseAndSchema（建库 + 建表 + 轻量迁移），然后列出表验证。
  */
 
-import { db } from "./index";
-import { CREATE_TABLES_SQL } from "./schema";
+import { db, dbReady } from "./index";
 
 async function main() {
-  console.log("🔄 初始化数据库...");
-  db.raw.exec(CREATE_TABLES_SQL);
-  console.log("✅ 数据库初始化完成");
-  db.close();
+  console.log("🔄 初始化 MySQL（建库 + 建表 + 迁移）...");
+  await dbReady();
+  const tables = await db.all<Record<string, string>>("SHOW TABLES");
+  console.log(
+    "✅ 表列表:",
+    tables.map((t) => Object.values(t)[0])
+  );
+  await db.close();
 }
 
 main().catch((err) => {

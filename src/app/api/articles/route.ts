@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
     sql += " ORDER BY updated_at DESC";
 
-    const articles = db.all(sql, params);
+    const articles = await db.all(sql, params);
     return NextResponse.json({ articles });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const uuid = generateUuid();
     const wordCount = countWords(content);
 
-    const r = db.run(
+    const r = await db.run(
       `INSERT INTO articles (uuid, title, content, source_type, source_ref, direction_index, style, word_count)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -61,14 +61,14 @@ export async function POST(req: NextRequest) {
       ]
     );
 
-    const article = db.get("SELECT * FROM articles WHERE id = ?", [
+    const article = await db.get("SELECT * FROM articles WHERE id = ?", [
       r.lastInsertRowid,
     ]);
 
     // 把 article_id 写回 research_session，让 write 页能反查方向 + 资料
     if (sessionId) {
       try {
-        db.run(`UPDATE research_sessions SET article_id = ? WHERE id = ?`, [
+        await db.run(`UPDATE research_sessions SET article_id = ? WHERE id = ?`, [
           r.lastInsertRowid,
           sessionId,
         ]);

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import type { HotListResult, HotTopicsData } from "@/lib/hot/fetcher";
-import { formatTimeAgo } from "@/lib/utils";
+import { formatTimeAgo, apiUrl } from "@/lib/utils";
 
 interface HotListProps {
   /** SSR 注入的首屏数据，避免初始闪烁 */
@@ -52,7 +53,7 @@ export function HotList({ initialData }: HotListProps) {
 
     try {
       // cache: "no-store" 强制不走 next-cache，每次都打后端
-      const res = await fetch("/api/hot", { cache: "no-store" });
+      const res = await fetch(apiUrl("/api/hot"), { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const fresh: HotTopicsData = await res.json();
       setData(fresh);
@@ -178,7 +179,7 @@ export function HotList({ initialData }: HotListProps) {
                         {item.title}
                       </a>
                       {/* 一键写图标按钮：默认透明，hover 时滑入 */}
-                      <a
+                      <Link
                         href={`/research?keyword=${encodeURIComponent(item.title)}&source=${p}&url=${encodeURIComponent(item.url)}&auto=1`}
                         className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center
                                    text-base hover:text-brand-600 hover:bg-brand-50
@@ -188,7 +189,7 @@ export function HotList({ initialData }: HotListProps) {
                         aria-label="一键写"
                       >
                         ✍️
-                      </a>
+                      </Link>
                     </div>
                   </li>
                 ))}

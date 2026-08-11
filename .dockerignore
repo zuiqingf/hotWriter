@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+data
+public/uploads
+README.md
+PRODUCT.md
+TECHNICAL.md
+.env
+.env.local
+.env.production
+*.log
+test-migration*
+.inspect-180.sh
+scripts/deploy.sh
+.claude

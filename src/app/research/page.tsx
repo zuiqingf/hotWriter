@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { apiUrl } from "@/lib/utils";
 
 interface AgentStep {
   type: string;
@@ -81,7 +82,7 @@ function ResearchContent() {
     setError("");
 
     try {
-      const response = await fetch("/api/research", {
+      const response = await fetch(apiUrl("/api/research"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyword, sourceUrl }),
@@ -159,7 +160,7 @@ function ResearchContent() {
 
     try {
       // 先创建文章
-      const createRes = await fetch("/api/articles", {
+      const createRes = await fetch(apiUrl("/api/articles"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -176,7 +177,7 @@ function ResearchContent() {
       const { article } = await createRes.json();
 
       // 触发生成初稿
-      fetch(`/api/articles/${article.id}/generate`, {
+      fetch(apiUrl(`/api/articles/${article.id}/generate`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

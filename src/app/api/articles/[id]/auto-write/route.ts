@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   }
 
   // 1. 读 article
-  const article = db.get<{
+  const article = await db.get<{
     id: number;
     title: string;
     content: string | null;
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   }
 
   // 2. 反向查 research_session（按 article_id）
-  const session = db.get<{
+  const session = await db.get<{
     id: number;
     keyword: string;
     directions: string | null;
@@ -179,7 +179,7 @@ ${extraInstructions ? `## 额外要求\n${extraInstructions}\n` : ""}
 
         // 选平台 prompt（默认走通用 writer prompt）
         const systemPrompt = platform
-          ? getPlatformSystemPrompt(platform)
+          ? getPlatformSystemPrompt(platform as "zhihu" | "xiaohongshu" | "toutiao" | "wechat")
           : getPlatformSystemPrompt("toutiao"); // 未指定平台时，兜底走头条风格
 
         const messages: ChatCompletionMessageParam[] = [
@@ -254,9 +254,9 @@ async function writeBack(
   controller: ReadableStreamDefaultController
 ) {
   try {
-    db.run(
+    await db.run(
       `UPDATE articles
-       SET content = ?, title = ?, style = ?, word_count = ?, updated_at = unixepoch()
+       SET content = ?, title = ?, style = ?, word_count = ?, updated_at = UNIX_TIMESTAMP()
        WHERE id = ?`,
       [content, title, style, content.length, articleId]
     );
@@ -267,8 +267,8 @@ async function writeBack(
 
 async function logAssistantMsg(articleId: number, content: string) {
   try {
-    db.run(
-      `INSERT INTO article_versions (article_id, content, title, trigger)
+    await db.run(
+      `INSERT INTO article_versions (article_id, content, title, \`trigger\`)
        VALUES (?, ?, ?, ?)`,
       [articleId, content, null, "auto_write"]
     );

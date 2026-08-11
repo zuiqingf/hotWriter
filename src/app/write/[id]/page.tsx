@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Markdown } from "@/components/Markdown";
 import { RichEditor, RichEditorHandle } from "@/components/RichEditor";
 import { normalizeToHtml, mdToHtml } from "@/lib/markdown";
-import { formatTimeAgo, countWords } from "@/lib/utils";
+import { formatTimeAgo, countWords, apiUrl } from "@/lib/utils";
 import { useToasts, ToastViewport } from "@/components/Toast";
 import TurndownService from "turndown";
 
@@ -109,7 +109,7 @@ export default function WritePage() {
 
   async function loadArticle() {
     try {
-      const res = await fetch(`/api/articles/${id}`);
+      const res = await fetch(apiUrl(`/api/articles/${id}`));
       if (!res.ok) throw new Error("文章不存在");
       const data = await res.json();
       const a = data.article;
@@ -217,7 +217,7 @@ export default function WritePage() {
     });
 
     try {
-      const res = await fetch(`/api/articles/${id}/auto-write`, {
+      const res = await fetch(apiUrl(`/api/articles/${id}/auto-write`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -329,7 +329,7 @@ export default function WritePage() {
     if (!article) return;
     setSaving(true);
     try {
-      await fetch(`/api/articles/${id}`, {
+      await fetch(apiUrl(`/api/articles/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content }),
@@ -353,7 +353,7 @@ export default function WritePage() {
     setMessages((prev) => [...prev, aiPlaceholder]);
 
     try {
-      const response = await fetch(`/api/articles/${id}/chat`, {
+      const response = await fetch(apiUrl(`/api/articles/${id}/chat`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userInput }),
@@ -554,7 +554,7 @@ export default function WritePage() {
     setComplianceResult(null);
     setPanelPos(null);   // 每次重新校验都重置位置
     try {
-      const res = await fetch(`/api/articles/${article?.id}/check-compliance`, {
+      const res = await fetch(apiUrl(`/api/articles/${article?.id}/check-compliance`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, platform: currentPlatform }),

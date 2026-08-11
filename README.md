@@ -12,7 +12,7 @@
 - 🔍 **关键词 Agent 调研**：自动调搜索工具（最多 8 轮），输出 3–5 个写作方向
 - ✍️ **AI 初稿生成**：基于选定的方向、提纲、素材生成 Markdown 初稿
 - 💬 **多轮 AI 对话**：写作工坊左栏对话，对文章做修改、润色、扩写
-- 📚 **作品库**：所有文章持久化到本地 SQLite
+- 📚 **作品库**：所有文章持久化到 MySQL（远端实例 `47.111.1.180:3306/db_hotwriter`）
 - 💰 **成本追踪**：每次 LLM 调用的费用都记录
 - 🔄 **自动保存**：编辑过程防丢失，每 1.5 秒 debounce 保存
 
@@ -53,13 +53,13 @@
 
 ### 1. 环境要求
 
-- Node.js 22+（`node:sqlite` 需要）
-- npm 或 pnpm
+- Node.js 20+（生产用 Docker，alpine 镜像）
+- npm（包管理）
+- 可达的 MySQL 8.0+ 实例（默认连 OnePlatform 的 `47.111.1.180:3306`）
 
 ### 2. 安装依赖
 
 ```bash
-cd /Users/zhaoyuanguang/articleWriting/hotwriter
 npm install
 ```
 
@@ -72,22 +72,44 @@ cp .env.example .env
 编辑 `.env`：
 
 ```env
-DEEPSEEK_API_KEY=sk-your-key-here     # 必填
-TAVILY_API_KEY=tvly-your-key-here     # 推荐填
+DEEPSEEK_API_KEY=sk-your-key-here       # 必填
+TAVILY_API_KEY=tvly-your-key-here       # 选填（无则降级到 LLM 自有知识）
+DATABASE_URL=mysql://USER:PASSWORD@HOST:3306/db_hotwriter?charset=utf8mb4
 ```
 
-- DeepSeek API Key：https://platform.deepseek.com/
-- Tavily API Key：https://tavily.com（免费 1000 次/月）
+> ⚠️ 密码中含 `#` 等特殊字符必须 URL-encode（`#` → `%23`），否则 URL fragment 会被截断。
 
-### 4. 启动
+### 4. 启动开发服务器
 
 ```bash
 npm run dev
 ```
 
-打开 http://localhost:3000（端口被占用会自动跳到 3005、3006...）
+打开 http://localhost:3000/hotwriter
 
-> 💡 数据库（`data/hotwriter.db`）和上传目录（`public/uploads/`）**首次运行自动创建**，无需手动 migrate。
+> 💡 数据库 schema 在应用首次启动时自动建库 + 建表（`CREATE DATABASE IF NOT EXISTS` + `CREATE TABLE IF NOT EXISTS`），无需手动 migrate。
+
+## 🐳 生产部署（Docker）
+
+一键部署到 180 服务器（`47.111.1.180`）：
+
+```bash
+# 1. 本地 export 两个必填变量（不入 git；可放进 ~/.bashrc 一次性配置）
+export HOTWRITER_DEEPSEEK_KEY=sk-xxxxxxxxxx
+export HOTWRITER_DB_PASSWORD='<your-mysql-password>'   # 明文，脚本会自动 URL-encode
+# 可选：export HOTWRITER_TAVILY_KEY=tvly-xxxxx
+
+# 2. 跑部署脚本
+bash scripts/deploy.sh
+```
+
+脚本会：本地检查 env 变量 → URL-encode 密码 → 打包 src + 构造 .env → scp 到 `/root/hotwriter/` → 远程 `docker build` + `docker run` → 验证。
+
+> 🔐 **密钥安全**：`HOTWRITER_DEEPSEEK_KEY` 和 `HOTWRITER_DB_PASSWORD` 只存在于你本地 shell 环境和服务器上的 `/root/hotwriter/.env`（600 权限），不会进 git。
+
+外部访问：**https://www.gydblog.com/hotwriter**（原生 nginx 反代到容器 `127.0.0.1:3010`）。
+
+详见 [TECHNICAL.md#8-部署与运行](TECHNICAL.md)。
 
 ## 📚 文档
 
@@ -95,58 +117,6 @@ npm run dev
 |------|------|
 | [TECHNICAL.md](TECHNICAL.md) | 架构、技术栈、目录、核心模块、数据流、数据库、部署、踩坑 |
 | [PRODUCT.md](PRODUCT.md) | 定位、用户、核心功能、用户流程、详细功能、适用场景、设计理念、FAQ |
-
-## 🚀 快速开始
-
-### 1. 环境要求
-
-- Node.js 18+
-- pnpm（推荐）或 npm
-
-### 2. 安装依赖
-
-```bash
-cd /Users/zhaoyuanguang/articleWriting/hotwriter
-pnpm install
-```
-
-### 3. 配置环境变量
-
-```bash
-cp .env.example .env
-```
-
-编辑 `.env`，必填项：
-
-```env
-DEEPSEEK_API_KEY=sk-your-key-here
-```
-
-可选（推荐填）：
-
-```env
-TAVILY_API_KEY=tvly-your-key-here
-```
-
-获取地址：
-- DeepSeek API Key：https://platform.deepseek.com/
-- Tavily API Key：https://tavily.com（免费 1000 次/月）
-
-> 💡 **没 Tavily 也能跑** — Agent 会降级为基于 LLM 自有知识给方向
-
-### 4. 初始化数据库
-
-```bash
-pnpm db:migrate
-```
-
-### 5. 启动
-
-```bash
-pnpm dev
-```
-
-打开 http://localhost:3000
 
 ## 📂 项目结构
 
@@ -177,13 +147,14 @@ hotwriter/
 │       │   ├── tavily.ts      # Tavily 搜索
 │       │   └── zhihu.ts       # 知乎/小红书/fetch
 │       ├── db/
-│       │   ├── schema.ts      # 6 张表定义
-│       │   ├── index.ts       # 连接
-│       │   └── migrate.ts     # 迁移脚本
+│       │   ├── schema.ts      # 6 张表定义（MySQL DDL）
+│       │   ├── index.ts       # mysql2 连接池 + async API
+│       │   ├── migrate.ts     # 初始化脚本（建库 + 建表）
+│       │   └── reset.ts       # DROP + CREATE DATABASE
 │       ├── cost/tracker.ts    # 成本追踪
 │       └── utils.ts
-├── data/                       # SQLite 文件存储
-├── drizzle.config.ts
+├── scripts/deploy.sh          # 一键 Docker 部署到 180
+├── Dockerfile
 ├── tailwind.config.ts
 └── package.json
 ```
@@ -203,19 +174,21 @@ hotwriter/
 
 ```bash
 # 开发
-pnpm dev
+npm run dev
 
 # 构建生产版本
-pnpm build
-pnpm start
+npm run build
+npm start
 
 # 数据库
-pnpm db:migrate    # 初始化 / 迁移
-pnpm db:studio     # Drizzle Studio（可视化数据库）
-pnpm db:reset      # 重置（删库重建）
+npm run db:migrate    # 触发建库 + 建表（应用启动时也会自动执行）
+npm run db:reset      # 危险：DROP DATABASE + 重建（清空数据）
 
-# 类型检查 & 构建
-pnpm build
+# 类型检查
+npx tsc --noEmit
+
+# 部署到 180
+bash scripts/deploy.sh
 ```
 
 ## 📊 当前成本参考
@@ -257,7 +230,6 @@ v1.0 (稳定)
 
 v2.0+ (可选)
 ├─ 多用户（如果想开放）
-├─ PostgreSQL 迁移
 ├─ 自托管部署
 └─ 系列文章管理
 ```
@@ -281,11 +253,15 @@ A: 可能原因：
 
 ### Q4: 数据存在哪里？
 
-A: SQLite 单文件：`data/hotwriter.db`。备份直接复制这个文件。
+A: MySQL 数据库 `db_hotwriter`（部署在 OnePlatform 的 `47.111.1.180:3306` 实例）。备份用 `mysqldump`：
+
+```bash
+mysqldump -h 47.111.1.180 -uroot -p db_hotwriter > backup.sql
+```
 
 ### Q5: 想迁移到其他 LLM？
 
-A: 编辑 `src/lib/llm/client.ts`，把 baseURL 和 model 改一下即可（DeeSeek/Qwen/Moonshot 都支持 OpenAI 兼容）。
+A: 编辑 `src/lib/llm/client.ts`，把 baseURL 和 model 改一下即可（DeepSeek/Qwen/Moonshot 都支持 OpenAI 兼容）。
 
 ## 🔗 相关文档
 

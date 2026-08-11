@@ -300,10 +300,10 @@ export async function fetchAllHotTopics(): Promise<HotTopicsData> {
   ]);
 
   // 持久化成功的实时数据（失败的 fallback 不入库，避免脏数据）
-  if (thepaper.ok) persistHotTopics(thepaper.items, "thepaper");
-  if (toutiao.ok) persistHotTopics(toutiao.items, "toutiao");
-  if (baidu.ok) persistHotTopics(baidu.items, "baidu");
-  if (douyin.ok) persistHotTopics(douyin.items, "douyin");
+  if (thepaper.ok) await persistHotTopics(thepaper.items, "thepaper");
+  if (toutiao.ok) await persistHotTopics(toutiao.items, "toutiao");
+  if (baidu.ok) await persistHotTopics(baidu.items, "baidu");
+  if (douyin.ok) await persistHotTopics(douyin.items, "douyin");
 
   return {
     thepaper,
@@ -323,7 +323,7 @@ export async function fetchAllHotTopics(): Promise<HotTopicsData> {
  */
 const DEDUP_WINDOW_SEC = 24 * 3600;
 
-function persistHotTopics(items: HotItem[], source: string): void {
+async function persistHotTopics(items: HotItem[], source: string): Promise<void> {
   try {
     const now = Math.floor(Date.now() / 1000);
     const threshold = now - DEDUP_WINDOW_SEC;
@@ -331,7 +331,7 @@ function persistHotTopics(items: HotItem[], source: string): void {
     for (const item of items) {
       if (!item.title || item.title.length < 4) continue;
 
-      const existing = db.get<{ id: number }>(
+      const existing = await db.get<{ id: number }>(
         `SELECT id FROM hot_topics
          WHERE source = ? AND title = ?
            AND fetched_at >= ?
@@ -341,14 +341,14 @@ function persistHotTopics(items: HotItem[], source: string): void {
       );
 
       if (existing) {
-        db.run(
+        await db.run(
           `UPDATE hot_topics
            SET hot_score = ?, fetched_at = ?, url = ?
            WHERE id = ?`,
           [item.hot ?? null, now, item.url, existing.id]
         );
       } else {
-        db.run(
+        await db.run(
           `INSERT INTO hot_topics (title, source, url, hot_score, fetched_at)
            VALUES (?, ?, ?, ?, ?)`,
           [item.title, source, item.url, item.hot ?? null, now]
@@ -371,10 +371,10 @@ export interface HotTopicRow {
   fetched_at: number;
 }
 
-export function queryRecentHotTopics(days: number = 7): HotTopicRow[] {
+export async function queryRecentHotTopics(days: number = 7): Promise<HotTopicRow[]> {
   try {
     const threshold = Math.floor(Date.now() / 1000) - days * 86400;
-    return db.all<HotTopicRow>(
+    return await db.all<HotTopicRow>(
       `SELECT title, source, hot_score, fetched_at
        FROM hot_topics
        WHERE fetched_at >= ?

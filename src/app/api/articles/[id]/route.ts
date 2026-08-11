@@ -17,11 +17,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     if (isNaN(id))
       return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
-    const article = db.get("SELECT * FROM articles WHERE id = ?", [id]);
+    const article = await db.get("SELECT * FROM articles WHERE id = ?", [id]);
     if (!article)
       return NextResponse.json({ error: "not found" }, { status: 404 });
 
-    const messages = db.all(
+    const messages = await db.all(
       "SELECT * FROM chat_messages WHERE article_id = ? ORDER BY created_at ASC",
       [id]
     );
@@ -58,19 +58,19 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
     const body = await req.json();
     const { title, content, style, status } = body;
 
-    const old = db.get("SELECT * FROM articles WHERE id = ?", [id]);
+    const old = await db.get("SELECT * FROM articles WHERE id = ?", [id]);
     if (!old)
       return NextResponse.json({ error: "not found" }, { status: 404 });
 
     // 保存版本历史
     if (content !== undefined && content !== old.content) {
-      db.run(
-        "INSERT INTO article_versions (article_id, content, title, trigger) VALUES (?, ?, ?, ?)",
+      await db.run(
+        "INSERT INTO article_versions (article_id, content, title, `trigger`) VALUES (?, ?, ?, ?)",
         [id, old.content, old.title, "manual_save"]
       );
     }
 
-    const updates: string[] = ["updated_at = unixepoch()"];
+    const updates: string[] = ["updated_at = UNIX_TIMESTAMP()"];
     const params: any[] = [];
 
     if (title !== undefined) {
@@ -93,9 +93,9 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
     }
 
     params.push(id);
-    db.run(`UPDATE articles SET ${updates.join(", ")} WHERE id = ?`, params);
+    await db.run(`UPDATE articles SET ${updates.join(", ")} WHERE id = ?`, params);
 
-    const updated = db.get("SELECT * FROM articles WHERE id = ?", [id]);
+    const updated = await db.get("SELECT * FROM articles WHERE id = ?", [id]);
     // 兼容字段名：驼峰给前端
     const camel = {
       ...updated,
@@ -117,7 +117,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
     if (isNaN(id))
       return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
-    db.run("UPDATE articles SET status = 'deleted', updated_at = unixepoch() WHERE id = ?", [
+    await db.run("UPDATE articles SET status = 'deleted', updated_at = UNIX_TIMESTAMP() WHERE id = ?", [
       id,
     ]);
     return NextResponse.json({ success: true });

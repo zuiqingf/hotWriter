@@ -1,7 +1,5 @@
 /**
- * 数据库 schema（纯 SQL 定义 + 类型）
- *
- * 用 Node 22+ 内置的 node:sqlite，无需 better-sqlite3 / drizzle-orm
+ * 数据库 schema（纯 SQL 定义 + 类型），MySQL 8.0+
  */
 
 export interface Article {
@@ -60,91 +58,94 @@ export interface UsageLog {
   created_at: number;
 }
 
-// 数据库表创建 SQL（一次性建表）
+// 数据库表创建 SQL（一次性建表，MySQL 8.0+）
 export const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS articles (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  content TEXT DEFAULT '',
-  source_type TEXT,
-  source_ref TEXT,
-  direction_index INTEGER,
-  style TEXT,
-  series_id INTEGER,
-  word_count INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'draft',
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  uuid VARCHAR(64) NOT NULL UNIQUE,
+  title VARCHAR(512) NOT NULL,
+  content MEDIUMTEXT,
+  source_type VARCHAR(32),
+  source_ref VARCHAR(255),
+  direction_index INT,
+  style VARCHAR(64),
+  series_id INT,
+  word_count INT DEFAULT 0,
+  status VARCHAR(32) DEFAULT 'draft',
   tags TEXT,
   metadata TEXT,
-  user_id INTEGER DEFAULT 1,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status);
-CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);
+  user_id INT DEFAULT 1,
+  created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  updated_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP())
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX idx_articles_status ON articles(status);
+CREATE INDEX idx_articles_created_at ON articles(created_at);
 
 CREATE TABLE IF NOT EXISTS article_versions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  title TEXT,
-  trigger TEXT,
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  article_id INT NOT NULL,
+  content MEDIUMTEXT NOT NULL,
+  title VARCHAR(512),
+  \`trigger\` VARCHAR(64),
   diff_summary TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
+  created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  CONSTRAINT fk_av_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS chat_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-  role TEXT NOT NULL,
-  content TEXT NOT NULL,
-  tokens_used INTEGER,
-  cost_cny TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE INDEX IF NOT EXISTS idx_chat_messages_article ON chat_messages(article_id, created_at);
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  article_id INT NOT NULL,
+  role VARCHAR(32) NOT NULL,
+  content MEDIUMTEXT NOT NULL,
+  tokens_used INT,
+  cost_cny VARCHAR(32),
+  created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  CONSTRAINT fk_cm_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX idx_chat_messages_article ON chat_messages(article_id, created_at);
 
 CREATE TABLE IF NOT EXISTS research_sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  keyword TEXT NOT NULL,
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  keyword VARCHAR(255) NOT NULL,
   user_input TEXT,
-  research_log TEXT,
+  research_log LONGTEXT,
   directions TEXT,
-  article_id INTEGER REFERENCES articles(id) ON DELETE SET NULL,
-  chosen_direction INTEGER,
-  total_cost_cny TEXT,
-  tool_call_count INTEGER DEFAULT 0,
-  model TEXT,
+  article_id INT,
+  chosen_direction INT,
+  total_cost_cny VARCHAR(32),
+  tool_call_count INT DEFAULT 0,
+  model VARCHAR(64),
   source_url TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
+  created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  CONSTRAINT fk_rs_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS hot_topics (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  source TEXT NOT NULL,
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  title VARCHAR(512) NOT NULL,
+  source VARCHAR(32) NOT NULL,
   url TEXT,
-  external_id TEXT,
-  hot_score INTEGER,
-  category TEXT,
+  external_id VARCHAR(128),
+  hot_score INT,
+  category VARCHAR(64),
   summary TEXT,
-  event_group_id TEXT,
-  fetched_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  expired_at INTEGER
-);
-CREATE INDEX IF NOT EXISTS idx_hot_source_score ON hot_topics(source, hot_score);
+  event_group_id VARCHAR(128),
+  fetched_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  expired_at BIGINT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX idx_hot_source_score ON hot_topics(source, hot_score);
 
 CREATE TABLE IF NOT EXISTS usage_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  action TEXT NOT NULL,
-  model TEXT,
-  tokens_input INTEGER,
-  tokens_output INTEGER,
-  cost_cny TEXT,
-  duration_ms INTEGER,
-  article_id INTEGER,
-  session_id INTEGER,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_logs(created_at);
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  action VARCHAR(64) NOT NULL,
+  model VARCHAR(64),
+  tokens_input INT,
+  tokens_output INT,
+  cost_cny VARCHAR(32),
+  duration_ms INT,
+  article_id INT,
+  session_id INT,
+  created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP())
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX idx_usage_created ON usage_logs(created_at);
 `;

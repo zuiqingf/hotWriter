@@ -8,6 +8,17 @@ export function generateUuid(): string {
   return randomUUID();
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
+/**
+ * 给手写的 fetch URL 自动加 basePath 前缀。
+ * 仅在浏览器端用;server 端无需调用。
+ */
+export function apiUrl(path: string): string {
+  if (!path.startsWith("/")) path = "/" + path;
+  return API_BASE + path;
+}
+
 /**
  * 估算文本 token 数（粗略估算）
  * 实际应使用 tokenizer，但简单场景够用

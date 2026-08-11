@@ -33,6 +33,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { apiUrl } from "@/lib/utils";
 
 export interface RichEditorHandle {
   /** 在光标处插入一段 Markdown 文本（用于 AI 回复"插入"按钮） */
@@ -194,7 +195,7 @@ async function uploadAndInsertImage(file: File, editor: any) {
   const fd = new FormData();
   fd.append("file", file);
   try {
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const res = await fetch(apiUrl("/api/upload"), { method: "POST", body: fd });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       alert("上传失败：" + (data.error || res.statusText));
@@ -505,7 +506,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(function
     setAiPreview(preview);
 
     try {
-      const res = await fetch(`/api/articles/${articleId}/ai-edit`, {
+      const res = await fetch(apiUrl(`/api/articles/${articleId}/ai-edit`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, text: selectedText, context: articleContext }),

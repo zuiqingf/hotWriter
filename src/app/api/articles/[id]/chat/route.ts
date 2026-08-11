@@ -22,11 +22,11 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   const { userInput } = body;
   if (!userInput?.trim()) return new Response("userInput required", { status: 400 });
 
-  const article = db.get("SELECT * FROM articles WHERE id = ?", [articleId]);
+  const article = await db.get("SELECT * FROM articles WHERE id = ?", [articleId]);
   if (!article) return new Response("not found", { status: 404 });
 
   // 历史消息
-  const history = db.all(
+  const history = await db.all(
     "SELECT * FROM chat_messages WHERE article_id = ? ORDER BY created_at ASC LIMIT 30",
     [articleId]
   );
@@ -56,7 +56,7 @@ ${articleText.length > 6000 ? articleText.slice(0, 6000) + "\n\n...（已截断�
   ];
 
   // 持久化用户消息
-  db.run(
+  await db.run(
     "INSERT INTO chat_messages (article_id, role, content) VALUES (?, ?, ?)",
     [articleId, "user", userInput]
   );
@@ -92,7 +92,7 @@ ${articleText.length > 6000 ? articleText.slice(0, 6000) + "\n\n...（已截断�
           }
         }
 
-        db.run(
+        await db.run(
           "INSERT INTO chat_messages (article_id, role, content) VALUES (?, ?, ?)",
           [articleId, "assistant", fullReply]
         );

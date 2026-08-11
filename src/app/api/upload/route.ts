@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   const buf = Buffer.from(await file.arrayBuffer());
   fs.writeFileSync(fullPath, buf);
 
-  const url = `/uploads/${yyyymm}/${filename}`;
+  const url = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/uploads/${yyyymm}/${filename}`;
   return Response.json({
     url,
     name: file.name,

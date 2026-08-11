@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   const body = await req.json();
   const { direction, outline, style, materials, title } = body;
 
-  const article = db.get("SELECT * FROM articles WHERE id = ?", [articleId]);
+  const article = await db.get("SELECT * FROM articles WHERE id = ?", [articleId]);
   if (!article)
     return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -68,9 +68,9 @@ ${materials || "（无）"}
     const outputTokens = response.usage?.completion_tokens || 0;
     const cost = inputTokens * 0.000001 + outputTokens * 0.000002;
 
-    db.run(
+    await db.run(
       `UPDATE articles
-       SET content = ?, title = ?, style = ?, word_count = ?, updated_at = unixepoch()
+       SET content = ?, title = ?, style = ?, word_count = ?, updated_at = UNIX_TIMESTAMP()
        WHERE id = ?`,
       [content, finalTitle, finalStyle, content.length, articleId]
     );
