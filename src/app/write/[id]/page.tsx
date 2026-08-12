@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Markdown } from "@/components/Markdown";
 import { RichEditor, RichEditorHandle } from "@/components/RichEditor";
+import { ResearchPanel, Direction } from "@/components/write/ResearchPanel";
 import { normalizeToHtml, mdToHtml } from "@/lib/markdown";
 import { formatTimeAgo, countWords, apiUrl } from "@/lib/utils";
 import { useToasts, ToastViewport } from "@/components/Toast";
@@ -40,6 +41,11 @@ export default function WritePage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  // 调研详情（用于对话区顶部可折叠面板）
+  const [researchKeyword, setResearchKeyword] = useState<string>("");
+  const [researchDirection, setResearchDirection] = useState<Direction | null>(null);
+  const [researchDirectionIndex, setResearchDirectionIndex] = useState<number | null>(null);
+  const [researchTotalDirections, setResearchTotalDirections] = useState<number>(0);
   const [saving, setSaving] = useState(false);
   const [aiInput, setAiInput] = useState("");
   const [aiStreaming, setAiStreaming] = useState(false);
@@ -89,11 +95,18 @@ export default function WritePage() {
   // 校验面板拖动位置（null = 居中）
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  // 已应用的 fix 标记（key = v.text）
+  const [appliedFixes, setAppliedFixes] = useState<Set<string>>(new Set());
 
   const debounceRef = useRef<NodeJS.Timeout>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // 富文本编辑器 ref（用于 AI 流式写入时主动 setContent）
   const editorRef = useRef<RichEditorHandle>(null);
+  // 自动写完成后跳过下一次 debounce save（避免与 server 端 auto_write 版本重复）
+  const skipNextSaveRef = useRef(false);
+  // assistant 气泡位置（写入流式内容时用，ref 而非闭包变量——React 18 setState 异步，
+  // 只读 updater 的闭包可能在某些情况下读到旧值）
+  const aiBubbleIdxRef = useRef<number>(-1);
 
   // 初始加载
   useEffect(() => {
@@ -115,9 +128,36 @@ export default function WritePage() {
       const a = data.article;
       setArticle(a);
       setTitle(a.title);
+
+      // 提取调研 session（用于"调研详情"面板）
+      const session = data.researchSession;
+      if (session) {
+        setResearchKeyword(session.keyword || "");
+        setResearchDirection(session.selectedDirection || null);
+        setResearchDirectionIndex(a.directionIndex ?? null);
+        setResearchTotalDirections((session.directions || []).length);
+      } else {
+        setResearchKeyword("");
+        setResearchDirection(null);
+        setResearchDirectionIndex(null);
+        setResearchTotalDirections(0);
+      }
       // 老文章 DB 里可能存的是 markdown，统一转 HTML 给 Tiptap
       setContent(normalizeToHtml(a.content || ""));
-      setMessages(data.messages || []);
+      // 归一化：DB 里持久化的 event 消息没有 eventType 字段，按 content 前缀推断
+      // （保证历史对话气泡重新进入页面时仍能正确显示）
+      setMessages(
+        (data.messages || []).map((m: any) => {
+          if (m.role !== "event") return m;
+          if (m.eventType) return m;   // 内存态已经有 eventType（当次会话）
+          if (typeof m.content === "string") {
+            if (m.content.startsWith("✅")) return { ...m, eventType: "write_done" };
+            if (m.content.startsWith("❌")) return { ...m, eventType: "write_error" };
+            if (m.content.startsWith("✨")) return { ...m, eventType: "write_start" };
+          }
+          return m;
+        })
+      );
 
       // 进入页面后，若有方向 + 内容空 → 自动让 Agent 写
       const hasDirection =
@@ -126,6 +166,9 @@ export default function WritePage() {
       if (hasDirection && isEmpty && !autoStartedRef.current) {
         autoStartedRef.current = true;
         setTimeout(() => runAutoWrite(), 100);
+      } else if (!isEmpty) {
+        // 已有内容的文章：默认展开右侧编辑器（不然用户看不到自己/Agent 写的正文）
+        setEditorVisible(true);
       }
     } catch (err: any) {
       alert(err.message);
@@ -198,23 +241,23 @@ export default function WritePage() {
     const actionLabel = "✨ Agent 写作";
 
     // 占位：先插一条 write_start event + 一个空 assistant 气泡
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "event",
-        eventType: "write_start",
-        content: `${actionLabel}\n按调研方向生成全文...`,
-      },
-      { role: "assistant", content: "" },
-    ]);
-    setContent(""); // 清空正文区
-
-    // assistant 气泡的位置（write_start 之后的最后一个）
-    let aiBubbleIdx = -1;
+    // 同步算出 assistant 气泡在 messages 里的位置（ref 而非闭包变量，
+    // 避免 React 18 batching 让只读 updater 的闭包读到旧 length）
+    aiBubbleIdxRef.current = -1; // 先置 -1，下面 setMessages 完成后回填
     setMessages((prev) => {
-      aiBubbleIdx = prev.length - 1;
-      return prev;
+      const next = [
+        ...prev,
+        {
+          role: "event",
+          eventType: "write_start",
+          content: `${actionLabel}\n按调研方向生成全文...`,
+        },
+        { role: "assistant", content: "" },
+      ];
+      aiBubbleIdxRef.current = next.length - 1;
+      return next;
     });
+    setContent(""); // 清空正文区
 
     try {
       const res = await fetch(apiUrl(`/api/articles/${id}/auto-write`), {
@@ -265,8 +308,9 @@ export default function WritePage() {
               // 直接 stream 到 assistant 气泡（用户能看到 AI 实时在写）
               setMessages((prev) => {
                 const copy = [...prev];
-                if (aiBubbleIdx >= 0 && copy[aiBubbleIdx]) {
-                  copy[aiBubbleIdx] = {
+                const idx = aiBubbleIdxRef.current;
+                if (idx >= 0 && copy[idx]) {
+                  copy[idx] = {
                     role: "assistant",
                     content: accumulated,
                   };
@@ -291,6 +335,8 @@ export default function WritePage() {
               });
               // 自动写完成后展开右侧编辑器（与点击编辑按钮行为一致）
               setEditorVisible(true);
+              // 跳过下一次 debounce save：server 端 logAutoWriteVersion 已经把这次结果存为版本了
+              skipNextSaveRef.current = true;
             } else if (event === "error") {
               throw new Error(data.message);
             }
@@ -315,6 +361,11 @@ export default function WritePage() {
   // 自动保存（debounce 1.5s）
   useEffect(() => {
     if (!article) return;
+    // 自动写完成后的第一次 content 变化已由 server 端 logAutoWriteVersion 存为版本，跳过
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       saveArticle();
@@ -607,6 +658,24 @@ export default function WritePage() {
   function closeCompliance() {
     setComplianceResult(null);
     setPanelPos(null);   // 重置位置
+    setAppliedFixes(new Set());   // 重置已应用标记
+  }
+
+  // 记录已应用的 fix（用 v.text 作为 key）
+
+  function handleApplyFix(v: { text?: string; fix?: string }) {
+    if (!v.text || !v.fix) return;
+    const ok = editorRef.current?.applyFixByText(v.text, v.fix) ?? false;
+    if (ok) {
+      setAppliedFixes((prev) => {
+        const next = new Set(prev);
+        next.add(v.text!);
+        return next;
+      });
+      showToast("已应用到原文", "success");
+    } else {
+      showToast("未找到匹配位置，请手动复制后修改", "error");
+    }
   }
 
   async function handleRewrite(platform: "zhihu" | "xiaohongshu" | "toutiao" | "wechat", label: string) {
@@ -960,6 +1029,14 @@ export default function WritePage() {
               </div>
             </div>
 
+            {/* 调研详情（可折叠） */}
+            <ResearchPanel
+              keyword={researchKeyword}
+              direction={researchDirection}
+              directionIndex={researchDirectionIndex}
+              totalDirections={researchTotalDirections}
+            />
+
             {/* 消息流 */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
               {messages.length === 0 && (
@@ -1197,7 +1274,14 @@ export default function WritePage() {
                 </div>
                 <div className="space-y-2">
                   {complianceResult.violations.map((v, i) => (
-                    <div key={i} className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div
+                      key={i}
+                      className={`rounded-lg p-3 border ${
+                        appliedFixes.has(v.text || "")
+                          ? "bg-emerald-50/50 border-emerald-300"
+                          : "bg-red-50 border-red-200"
+                      }`}
+                    >
                       {/* 头部：类别 + 严重等级 */}
                       <div className="flex items-start gap-2">
                         <span className="text-xs px-1.5 py-0.5 rounded bg-red-200 text-red-800 font-medium shrink-0">
@@ -1224,23 +1308,46 @@ export default function WritePage() {
                           )}
                           {v.fix && (
                             <div className="text-xs">
-                              <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center justify-between mb-1 gap-2">
                                 <span className="font-medium text-emerald-700">✓ 建议改为：</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(v.fix || "");
-                                    showToast("已复制修复版", "success");
-                                  }}
-                                  className="text-[10px] text-gray-500 hover:text-gray-900 inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white transition"
-                                  title="复制修复版到剪贴板"
-                                >
-                                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect width="13" height="13" x="9" y="9" rx="2" ry="2" />
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                                  </svg>
-                                  复制
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(v.fix || "");
+                                      showToast("已复制修复版", "success");
+                                    }}
+                                    className="text-[10px] text-gray-500 hover:text-gray-900 inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white transition"
+                                    title="复制修复版到剪贴板"
+                                  >
+                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect width="13" height="13" x="9" y="9" rx="2" ry="2" />
+                                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                    复制
+                                  </button>
+                                  {appliedFixes.has(v.text || "") ? (
+                                    <span className="text-[10px] text-emerald-700 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded font-medium">
+                                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                      已应用
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApplyFix(v)}
+                                      disabled={!v.text}
+                                      className="text-[10px] text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded transition"
+                                      title="自动定位原文并替换"
+                                    >
+                                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                      </svg>
+                                      应用到原文
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               <div className="bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5 text-emerald-900 whitespace-pre-wrap break-words">
                                 {v.fix}

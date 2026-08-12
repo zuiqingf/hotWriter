@@ -26,6 +26,54 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       [id]
     );
 
+    // 关联的调研 session（取最近一条；用于 write 页"调研详情"面板）
+    const sessionRow = await db.get<{
+      id: number;
+      keyword: string;
+      user_input: string | null;
+      directions: string | null;
+      source_url: string | null;
+      created_at: number;
+    }>(
+      `SELECT id, keyword, user_input, directions, source_url, created_at
+       FROM research_sessions
+       WHERE article_id = ?
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [id]
+    );
+
+    // 解析 directions JSON + 提取选中的那一条（按 article.direction_index）
+    let researchSession: {
+      id: number;
+      keyword: string;
+      userInput: string | null;
+      directions: any[];
+      selectedDirection: any | null;
+      sourceUrl: string | null;
+      createdAt: number;
+    } | null = null;
+    if (sessionRow) {
+      let dirs: any[] = [];
+      try {
+        dirs = sessionRow.directions ? JSON.parse(sessionRow.directions) : [];
+      } catch {
+        dirs = [];
+      }
+      const wantIdx = (article.direction_index ?? 1) - 1;
+      const selected =
+        wantIdx >= 0 && wantIdx < dirs.length ? dirs[wantIdx] : dirs[0] || null;
+      researchSession = {
+        id: sessionRow.id,
+        keyword: sessionRow.keyword,
+        userInput: sessionRow.user_input,
+        directions: dirs,
+        selectedDirection: selected,
+        sourceUrl: sessionRow.source_url,
+        createdAt: sessionRow.created_at,
+      };
+    }
+
     // 字段名驼峰化（前端用 camelCase，DB 是 snake_case）
     const camelArticle = {
       ...article,
@@ -43,7 +91,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       createdAt: m.created_at,
     }));
 
-    return NextResponse.json({ article: camelArticle, messages: camelMessages });
+    return NextResponse.json({
+      article: camelArticle,
+      messages: camelMessages,
+      researchSession,
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
