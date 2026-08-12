@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Markdown } from "@/components/Markdown";
@@ -104,9 +105,9 @@ export default function WritePage() {
   const editorRef = useRef<RichEditorHandle>(null);
   // 自动写完成后跳过下一次 debounce save（避免与 server 端 auto_write 版本重复）
   const skipNextSaveRef = useRef(false);
-  // assistant 气泡位置（写入流式内容时用，ref 而非闭包变量——React 18 setState 异步，
-  // 只读 updater 的闭包可能在某些情况下读到旧值）
-  const aiBubbleIdxRef = useRef<number>(-1);
+  // 注：assistant 流式气泡定位在 runAutoWrite / sendChatMessage 内
+  // 直接用 findLastIndex(m => m.role === "assistant") 自包含找——不要存 ref
+  // （React 18 batching 下 ref.current = N 不保证同步，下一个 delta 事件可能读到旧值）
 
   // 初始加载
   useEffect(() => {
@@ -241,11 +242,10 @@ export default function WritePage() {
     const actionLabel = "✨ Agent 写作";
 
     // 占位：先插一条 write_start event + 一个空 assistant 气泡
-    // 同步算出 assistant 气泡在 messages 里的位置（ref 而非闭包变量，
-    // 避免 React 18 batching 让只读 updater 的闭包读到旧 length）
-    aiBubbleIdxRef.current = -1; // 先置 -1，下面 setMessages 完成后回填
-    setMessages((prev) => {
-      const next = [
+    // 不需要 ref 记位置——delta 分支会用 findLastIndex 自包含定位
+    // flushSync 强制同步落 state，避免 React 18 batching 让 fetch 后第一个 delta 看不到占位
+    flushSync(() => {
+      setMessages((prev) => [
         ...prev,
         {
           role: "event",
@@ -253,11 +253,9 @@ export default function WritePage() {
           content: `${actionLabel}\n按调研方向生成全文...`,
         },
         { role: "assistant", content: "" },
-      ];
-      aiBubbleIdxRef.current = next.length - 1;
-      return next;
+      ]);
+      setContent(""); // 清空正文区
     });
-    setContent(""); // 清空正文区
 
     try {
       const res = await fetch(apiUrl(`/api/articles/${id}/auto-write`), {
@@ -306,10 +304,15 @@ export default function WritePage() {
               // AI 输出的是 Markdown，转 HTML 给 Tiptap 编辑器
               setContent(mdToHtml(accumulated));
               // 直接 stream 到 assistant 气泡（用户能看到 AI 实时在写）
+              // 自包含定位：手动倒序找最近的 assistant 气泡（避免 React 18 batching 下 ref 不同步；
+              // 也不用 findLastIndex，老 Safari/部分移动浏览器可能没 polyfill）
               setMessages((prev) => {
                 const copy = [...prev];
-                const idx = aiBubbleIdxRef.current;
-                if (idx >= 0 && copy[idx]) {
+                let idx = -1;
+                for (let i = copy.length - 1; i >= 0; i--) {
+                  if (copy[i].role === "assistant") { idx = i; break; }
+                }
+                if (idx >= 0) {
                   copy[idx] = {
                     role: "assistant",
                     content: accumulated,
@@ -433,10 +436,11 @@ export default function WritePage() {
               fullReply += data.text;
               setMessages((prev) => {
                 const copy = [...prev];
-                copy[copy.length - 1] = {
-                  role: "assistant",
-                  content: fullReply,
-                };
+                // 自包含定位：findLastIndex 找最近的 assistant 气泡（与 runAutoWrite 一致）
+                const idx = copy.findLastIndex((m) => m.role === "assistant");
+                if (idx >= 0) {
+                  copy[idx] = { role: "assistant", content: fullReply };
+                }
                 return copy;
               });
             } else if (event === "error") {
@@ -448,10 +452,10 @@ export default function WritePage() {
     } catch (err: any) {
       setMessages((prev) => {
         const copy = [...prev];
-        copy[copy.length - 1] = {
-          role: "assistant",
-          content: `❌ 错误：${err.message}`,
-        };
+        const idx = copy.findLastIndex((m) => m.role === "assistant");
+        if (idx >= 0) {
+          copy[idx] = { role: "assistant", content: `❌ 错误：${err.message}` };
+        }
         return copy;
       });
     } finally {
@@ -711,7 +715,7 @@ export default function WritePage() {
       )}
 
       {/* ===== 双栏：左对话 / 右编辑器（默认编辑器隐藏，点击编辑或自动写完成后展开） ===== */}
-      <main className="flex-1 flex flex-col md:flex-row-reverse bg-white overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row-reverse bg-white text-gray-900 overflow-hidden scrollbar-hide">
         {/* ==== 右（DOM 上在前）：富文本编辑器（带过渡动画） ==== */}
         <section
           className={`flex flex-col overflow-hidden transition-all duration-300 ease-in-out
@@ -957,7 +961,7 @@ export default function WritePage() {
           </div>
 
           {/* 编辑器内容 */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
             <div className="max-w-2xl mx-auto px-6 py-6">
               {content.trim() ? (
                 <RichEditor
@@ -1025,7 +1029,9 @@ export default function WritePage() {
               {/* 字数 + 保存状态 */}
               <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-gray-400">
                 {saving && <span>保存中…</span>}
-                <span>{content.length} 字</span>
+                <span className="tabular-nums">
+                  {countWords(content.replace(/<[^>]+>/g, ""))} 字
+                </span>
               </div>
             </div>
 
@@ -1038,7 +1044,7 @@ export default function WritePage() {
             />
 
             {/* 消息流 */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scrollbar-hide">
               {messages.length === 0 && (
                 <div className="text-center text-sm text-gray-400 py-8 px-2">
                   <div className="text-2xl mb-2">💬</div>
@@ -1260,7 +1266,7 @@ export default function WritePage() {
           </div>
 
           {/* 内容区 */}
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className="max-h-[60vh] overflow-y-auto scrollbar-hide">
             {/* 违规项 */}
             {complianceResult.violations.length > 0 && (
               <div className="px-4 py-3 border-b border-gray-100">
