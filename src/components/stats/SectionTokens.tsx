@@ -26,13 +26,10 @@ interface Props {
   snapshot: StatsSnapshot;
 }
 
-const PIE_COLORS = ["#6366f1", "#a855f7"]; // 输入 / 输出
+const PIE_COLORS = ["#6E8CFF", "#A855F7"]; // 输入 / 输出
 
-const ACTION_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#3b82f6"];
+const ACTION_COLORS = ["#6E8CFF", "#A855F7", "#EC4899", "#10B981", "#F59E0B", "#38BDF8"];
 
-// action 文案映射（纯中文，不带 emoji）
-// 实际写入 SQL 的 action 取值见：api/research("research")、api/articles/[id]/chat("chat")、
-// api/articles/[id]/generate("write")、api/articles/[id]/auto-write("write")、api/articles/[id]/ai-edit("ai-edit")
 const ACTION_LABELS: Record<string, string> = {
   research: "调研",
   write: "改写",
@@ -46,27 +43,37 @@ function fmtToken(n: number): string {
   return n.toString();
 }
 
+const TOOLTIP_STYLE = {
+  contentStyle: {
+    background: "rgba(10,10,15,0.92)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    borderRadius: 8,
+    color: "#fff",
+    fontSize: 12,
+  },
+  labelStyle: { color: "rgba(255,255,255,0.6)" },
+  itemStyle: { color: "#fff" },
+} as const;
+
 export function SectionTokens({ snapshot }: Props) {
   const { tokens, hasAnyLog } = snapshot;
 
   if (!hasAnyLog) {
     return (
-      <section className="card p-5">
-        <h3 className="font-semibold text-gray-900 mb-1">💸 Token 消耗详情</h3>
-        <div className="py-12 text-center text-sm text-gray-400">
+      <section className="stat-tile">
+        <h3 className="font-semibold text-white mb-1">💸 Token 消耗详情</h3>
+        <div className="py-12 text-center text-sm text-white/40">
           暂无 token 记录，跑过一次自动写就会出现
         </div>
       </section>
     );
   }
 
-  // Pie 数据
   const pieData = [
     { name: "输入", value: tokens.totalIn },
     { name: "输出", value: tokens.totalOut },
   ];
 
-  // Bar 数据
   const barData = tokens.byAction.map((a, i) => ({
     ...a,
     color: ACTION_COLORS[i % ACTION_COLORS.length],
@@ -76,11 +83,11 @@ export function SectionTokens({ snapshot }: Props) {
   const totalTokens = tokens.totalIn + tokens.totalOut;
 
   return (
-    <section className="card p-5">
+    <section className="stat-tile">
       <div className="flex items-end justify-between mb-4">
         <div>
-          <h3 className="font-semibold text-gray-900">💸 Token 消耗详情</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h3 className="font-semibold text-white">💸 Token 消耗详情</h3>
+          <p className="text-xs text-white/50 mt-0.5">
             共 {totalTokens.toLocaleString()} tokens · 累计 ¥{tokens.totalCost.toFixed(4)}
           </p>
         </div>
@@ -106,6 +113,7 @@ export function SectionTokens({ snapshot }: Props) {
                   }
                   labelLine={false}
                   fontSize={12}
+                  fill="#fff"
                 >
                   {pieData.map((_, i) => (
                     <Cell key={i} fill={PIE_COLORS[i]} />
@@ -114,6 +122,7 @@ export function SectionTokens({ snapshot }: Props) {
                 <Tooltip
                   formatter={(value: any) => value.toLocaleString()}
                   labelFormatter={() => "Token 数量"}
+                  {...TOOLTIP_STYLE}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -129,22 +138,23 @@ export function SectionTokens({ snapshot }: Props) {
                 data={barData}
                 margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis
                   dataKey="label"
-                  stroke="#9ca3af"
+                  stroke="rgba(255,255,255,0.4)"
                   fontSize={11}
                   interval={0}
                 />
                 <YAxis
-                  stroke="#9ca3af"
+                  stroke="rgba(255,255,255,0.4)"
                   fontSize={11}
                   tickFormatter={fmtToken}
                 />
                 <Tooltip
-                  cursor={{ fill: "rgba(99,102,241,0.06)" }}
+                  cursor={{ fill: "rgba(168,85,247,0.10)" }}
                   formatter={(value: any) => value.toLocaleString()}
                   labelFormatter={() => "Token 数量"}
+                  {...TOOLTIP_STYLE}
                 />
                 <Bar dataKey="tokens" radius={[4, 4, 0, 0]}>
                   {barData.map((d, i) => (
@@ -161,7 +171,7 @@ export function SectionTokens({ snapshot }: Props) {
           <div className="stat-label mb-2">明细</div>
           <div className="flex-1 min-h-0 overflow-auto">
             <table className="w-full text-xs">
-              <thead className="text-gray-500 border-b border-gray-100 sticky top-0 bg-white">
+              <thead className="text-white/40 border-b border-white/10 sticky top-0 bg-[#0a0a0f]">
                 <tr>
                   <th className="text-left py-5 pr-2 font-medium">动作</th>
                   <th className="text-right py-5 px-2 font-medium">次</th>
@@ -169,9 +179,9 @@ export function SectionTokens({ snapshot }: Props) {
                   <th className="text-right py-5 pl-2 font-medium">¥</th>
                 </tr>
               </thead>
-              <tbody className="text-gray-700">
+              <tbody className="text-white/80">
                 {tokens.byAction.map((a) => (
-                  <tr key={a.action} className="border-b border-gray-50 last:border-0">
+                  <tr key={a.action} className="border-b border-white/[0.06] last:border-0">
                     <td className="py-5 pr-2">{ACTION_LABELS[a.action] || a.action}</td>
                     <td className="py-5 px-2 text-right tabular-nums">{a.cnt}</td>
                     <td className="py-5 px-2 text-right tabular-nums">{a.tokens.toLocaleString()}</td>

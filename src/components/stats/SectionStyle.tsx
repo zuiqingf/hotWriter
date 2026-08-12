@@ -23,27 +23,26 @@ interface Props {
   snapshot: StatsSnapshot;
 }
 
-// 风格配色：复用 tailwind 调色板
+// 风格配色：暗底友好版
 const STYLE_COLORS = [
-  "#6366f1", // brand indigo
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#f59e0b", // amber
-  "#10b981", // emerald
-  "#3b82f6", // blue
-  "#06b6d4", // cyan
-  "#f43f5e", // rose
-  "#84cc16", // lime
-  "#a855f7", // purple
-  "#0ea5e9", // sky
-  "#64748b", // slate (未分类兜底)
+  "#A855F7", // purple
+  "#6E8CFF", // indigo blue
+  "#EC4899", // pink
+  "#38BDF8", // sky
+  "#10B981", // emerald
+  "#F59E0B", // amber
+  "#06B6D4", // cyan
+  "#F43F5E", // rose
+  "#84CC16", // lime
+  "#8B5CF6", // violet
+  "#0EA5E9", // sky2
+  "#64748B", // slate (未分类兜底)
 ];
 
 export function SectionStyle({ snapshot }: Props) {
   const data = snapshot.style;
   const total = data.reduce((sum, d) => sum + d.cnt, 0);
 
-  // 给 chart 用：截断 label
   const chartData = data.map((d, i) => ({
     ...d,
     shortLabel: d.styleLabel.length > 8 ? d.styleLabel.slice(0, 8) + "…" : d.styleLabel,
@@ -51,18 +50,18 @@ export function SectionStyle({ snapshot }: Props) {
   }));
 
   return (
-    <section className="card p-5">
+    <section className="stat-tile">
       <div className="flex items-end justify-between mb-4">
         <div>
-          <h3 className="font-semibold text-gray-900">🎨 文章风格分布</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h3 className="font-semibold text-white">🎨 文章风格分布</h3>
+          <p className="text-xs text-white/50 mt-0.5">
             按 articles.style 字段聚合 · 共 {total} 篇
           </p>
         </div>
       </div>
 
       {data.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">
+        <div className="py-12 text-center text-sm text-white/40">
           还没有任何风格数据
         </div>
       ) : (
@@ -75,17 +74,26 @@ export function SectionStyle({ snapshot }: Props) {
                 layout="vertical"
                 margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                <XAxis type="number" stroke="#9ca3af" fontSize={11} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                <XAxis type="number" stroke="rgba(255,255,255,0.4)" fontSize={11} />
                 <YAxis
                   type="category"
                   dataKey="shortLabel"
-                  stroke="#9ca3af"
+                  stroke="rgba(255,255,255,0.4)"
                   fontSize={11}
                   width={80}
                 />
                 <Tooltip
-                  cursor={{ fill: "rgba(99,102,241,0.06)" }}
+                  cursor={{ fill: "rgba(168,85,247,0.10)" }}
+                  contentStyle={{
+                    background: "rgba(10,10,15,0.92)",
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    borderRadius: 8,
+                    color: "#fff",
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+                  itemStyle={{ color: "#fff" }}
                   formatter={(value: any, _: any, item: any) => [
                     `${value} 篇 · ${item.payload.wordSum.toLocaleString()} 字`,
                     item.payload.styleLabel,
@@ -112,15 +120,15 @@ export function SectionStyle({ snapshot }: Props) {
                         className="w-2.5 h-2.5 rounded-sm shrink-0"
                         style={{ background: d.color }}
                       />
-                      <span className="text-gray-700 truncate" title={d.styleLabel}>
+                      <span className="text-white/80 truncate" title={d.styleLabel}>
                         {d.styleLabel}
                       </span>
                     </div>
-                    <span className="text-gray-500 tabular-nums shrink-0 ml-2">
+                    <span className="text-white/50 tabular-nums shrink-0 ml-2">
                       {d.cnt} 篇 · {pct}%
                     </span>
                   </div>
-                  <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
                     <div
                       className="h-full transition-all"
                       style={{

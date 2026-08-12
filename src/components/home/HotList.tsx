@@ -72,10 +72,10 @@ export function HotList({ initialData }: HotListProps) {
       {/* 标题区 */}
       <div className="flex items-end justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2">
+          <h2 className="text-lg font-semibold flex items-center gap-2 text-white">
             🔥 四大平台热搜
             <span
-              className={`text-xs font-normal text-gray-500 transition-opacity duration-200 ${refreshing ? "opacity-40" : "opacity-100"
+              className={`text-xs font-normal text-white/40 transition-opacity duration-200 ${refreshing ? "opacity-40" : "opacity-100"
                 }`}
             >
               · {formatTimeAgo(data.fetchedAt ? Math.floor(data.fetchedAt / 1000) : undefined)} 更新
@@ -90,9 +90,9 @@ export function HotList({ initialData }: HotListProps) {
             onClick={refresh}
             disabled={refreshing}
             className={`text-xs px-2 py-1 rounded-md flex items-center gap-1
-                       border border-gray-200 hover:bg-gray-50
+                       border border-white/10 hover:bg-white/5 text-white/70 hover:text-white
                        disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-all ${refreshing ? "text-brand-600" : "text-gray-700"
+                       transition-all ${refreshing ? "text-accent-300" : ""
               }`}
             title="立即重新抓取三平台热榜（绕过 30 分钟缓存）"
             aria-label="刷新热榜"
@@ -141,7 +141,7 @@ export function HotList({ initialData }: HotListProps) {
               <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-base">{meta.icon}</span>
-                  <h3 className="font-medium text-sm">{meta.label}</h3>
+                  <h3 className="font-medium text-sm text-gray-900">{meta.label}</h3>
                 </div>
                 <span
                   className={`text-xs px-1.5 py-0.5 rounded ${meta.color}`}

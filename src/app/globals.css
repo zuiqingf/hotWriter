@@ -14,7 +14,7 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-[#0a0a0f] text-white antialiased;
   }
 }
 
@@ -24,7 +24,7 @@
   }
 
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+    @apply btn bg-accent-500 text-white hover:bg-accent-600;
   }
 
   .btn-secondary {
@@ -36,28 +36,36 @@
   }
 
   .input {
-    @apply w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+    @apply w-full px-3 py-2 border border-ink-100 rounded outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-50;
   }
 
   .card {
     @apply bg-white border border-gray-200 rounded-xl;
   }
 
-  /* 统计页：KPI 数字 tile */
+  /* 统计页：KPI 数字 tile（暗色玻璃卡） */
   .stat-tile {
-    @apply card p-5 hover:border-brand-200 transition flex flex-col gap-2;
+    @apply p-5 rounded-xl flex flex-col gap-2 transition;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .stat-tile:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(168, 85, 247, 0.35);
   }
   .stat-num {
-    @apply text-3xl font-semibold text-gray-900 tabular-nums;
+    @apply text-3xl font-semibold text-white tabular-nums;
   }
   .stat-label {
-    @apply text-xs text-gray-500 uppercase tracking-wide font-medium;
+    @apply text-xs text-white/50 uppercase tracking-wide font-medium;
   }
   .stat-delta-up {
-    @apply text-emerald-600;
+    @apply text-emerald-400;
   }
   .stat-delta-down {
-    @apply text-red-600;
+    @apply text-red-400;
   }
 
   /* 写作编辑器：衬线字体，长文舒适 */
@@ -137,6 +145,24 @@
   background: #9ca3af;
 }
 
+/* 隐藏滚动条但保留滚动行为（暗色页面用）
+ * ⚠️ 浏览器的窗体滚动条在 <html>（WebKit/Firefox）上，不在页面 wrapper 上。
+ *    用 :has() 让 <html> 下任何位置出现 .scrollbar-hide 都触发隐藏。 */
+.scrollbar-hide {
+  scrollbar-width: none;         /* Firefox：本元素滚条 */
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+html:has(.scrollbar-hide)::-webkit-scrollbar {
+  display: none;                 /* Chrome/Safari：浏览器窗体滚条 */
+}
+html:has(.scrollbar-hide) {
+  scrollbar-width: none;         /* Firefox：浏览器窗体滚条 */
+  -ms-overflow-style: none;
+}
+
 /* 选区颜色：紫色调 */
 ::selection {
   background: rgba(99, 102, 241, 0.18);
@@ -155,4 +181,59 @@
 }
 .toast-in {
   animation: toast-in 0.18s ease-out;
+}
+
+/* ====== 首页 Hero 动画 ====== */
+
+/* 三个 aurora 光斑各自慢速漂移（不规则轨迹） */
+@keyframes orb-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(80px, 40px) scale(1.1); }
+  66%      { transform: translate(40px, 80px) scale(0.95); }
+}
+@keyframes orb-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(-60px, 60px) scale(1.05); }
+  66%      { transform: translate(-100px, 20px) scale(0.92); }
+}
+@keyframes orb-drift-3 {
+  0%, 100% { transform: translate(-50%, 0) scale(1); }
+  33%      { transform: translate(calc(-50% + 40px), 30px) scale(1.08); }
+  66%      { transform: translate(calc(-50% - 40px), 60px) scale(0.94); }
+}
+
+/* 网格背景慢速向右上漂移（视差感） */
+@keyframes grid-drift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 80px 80px; }
+}
+
+/* 装饰小竖条呼吸（用于渐变发光竖条） */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(168, 85, 247, 0.6); }
+  50%      { box-shadow: 0 0 20px rgba(168, 85, 247, 0.9); }
+}
+
+/* 打字机光标闪烁（首屏 Hero 标题用） */
+@keyframes tw-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* 搜索框聚焦时边框颜色 + 阴影的呼吸动画（蓝→粉→蓝） */
+@keyframes focus-border-glow {
+  0%, 100% {
+    border-color: rgba(110, 140, 255, 0.50);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 30px 80px -10px rgba(110, 140, 255, 0.45),
+      0 0 0 4px rgba(110, 140, 255, 0.18);
+  }
+  50% {
+    border-color: rgba(236, 72, 153, 0.55);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.12),
+      0 30px 80px -10px rgba(236, 72, 153, 0.50),
+      0 0 0 4px rgba(236, 72, 153, 0.22);
+  }
 }

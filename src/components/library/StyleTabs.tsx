@@ -31,7 +31,7 @@ export function StyleTabs({ allStyles, current }: Props) {
   ];
 
   return (
-    <div className="border-b border-gray-200 overflow-x-auto">
+    <div className="border-b border-white/10 overflow-x-auto scrollbar-hide">
       <div className="flex items-center gap-1 -mb-px min-w-max">
         {tabs.map((t) => {
           const active = current === t.key;
@@ -40,16 +40,25 @@ export function StyleTabs({ allStyles, current }: Props) {
               key={t.key}
               type="button"
               onClick={() => go(t.key)}
-              className={`px-4 py-2.5 text-sm whitespace-nowrap transition border-b-2 ${
+              className={`relative px-4 py-2.5 text-sm whitespace-nowrap transition border-b-2 ${
                 active
-                  ? "border-brand-600 text-brand-600 font-medium"
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
+                  ? "text-white font-medium"
+                  : "text-white/50 hover:text-white border-transparent hover:border-white/15"
               }`}
+              style={
+                active
+                  ? {
+                      borderImage:
+                        "linear-gradient(90deg, #6E8CFF 0%, #A855F7 100%) 1",
+                      textShadow: "0 0 12px rgba(168,85,247,0.5)",
+                    }
+                  : undefined
+              }
             >
               {t.label}
               <span
                 className={`ml-1.5 text-xs tabular-nums ${
-                  active ? "text-brand-500" : "text-gray-400"
+                  active ? "text-accent-300" : "text-white/30"
                 }`}
               >
                 {t.cnt}

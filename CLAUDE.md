@@ -201,9 +201,11 @@ docker run -d --name hotwriter -p 8080:3000 \
 
 | 现象 | 原因 | 修法 |
 |---|---|---|
-| `articles/[id]/auto-write` 接口返回数据，左侧气泡不实时显示 | React 18 batching 下 ref 不保证同步设值 | `findIndex` 自包含定位，不要存 ref |
+| `articles/[id]/auto-write` 接口返回数据，左侧气泡不实时显示（右编辑器正常，刷新后左侧才显示） | React 18 automatic batching 跨 `await` 不保证同步提交——占位 setMessages 还没 commit 时第一个 delta 已到达，updater 里找不到 assistant 气泡 | 占位插入用 `flushSync(() => setXxx(...))` 强制同步提交；delta 分支定位用手动倒序查找代替 findLastIndex |
 | `/api/articles/[id]/chat` 调 OpenAI 时报 400 unknown variant | 把 `role: "event"` 当 chat history 喂给 LLM | chat_messages 查询 `WHERE role IN ('user','assistant','system')` |
 | 编辑器默认看不到，刷新后才显示 | `editorVisible` 默认 false 且无内容时不展开 | `else if (!isEmpty) setEditorVisible(true)` |
+| 暗色内页（/library /research /stats）仍能看到滚动条 | 浏览器窗体滚动条在 `<html>`，`.scrollbar-hide::-webkit-scrollbar` 只匹配元素自身；横向 tab（StyleTabs）等 `overflow-x-auto` 容器也不会自动隐藏 | globals.css 用 `html:has(.scrollbar-hide)` 兜底窗体；任何 `overflow-auto` 容器直接加 `scrollbar-hide` class |
+| 首页编辑器里字体颜色和背景同色（看不见字） | globals.css 给 `body` 设了全局 `text-white`，但 /write 页背景是浅色 | 在 write 页 `<main>` 上加 `text-gray-900` 覆盖继承 |
 
 详见各 memory 文件。
 

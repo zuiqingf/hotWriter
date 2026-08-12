@@ -29,10 +29,10 @@ export function SectionKpi({ snapshot }: Props) {
   const overBudget = cost.pct >= 1;
   const warnBudget = cost.pct >= 0.66 && cost.pct < 1;
   const barColor = overBudget
-    ? "bg-red-500"
+    ? "#EF4444"
     : warnBudget
-      ? "bg-amber-500"
-      : "bg-emerald-500";
+      ? "#F59E0B"
+      : "#10B981";
   const barWidth = `${Math.min(pctClamped * 100, 100)}%`;
 
   return (
@@ -41,7 +41,7 @@ export function SectionKpi({ snapshot }: Props) {
       <div className="stat-tile">
         <div className="stat-label">总文章</div>
         <div className="stat-num">{hasData ? kpi.total : "—"}</div>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-white/50">
           {hasData
             ? `已归档 ${kpi.archived} 篇`
             : "暂无文章"}
@@ -52,7 +52,7 @@ export function SectionKpi({ snapshot }: Props) {
       <div className="stat-tile">
         <div className="stat-label">平均字数</div>
         <div className="stat-num">{hasData ? kpi.avgWords.toLocaleString() : "—"}</div>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-white/50">
           {hasData && kpi.lastCreatedAt
             ? `最近 ${formatTimeAgo(kpi.lastCreatedAt)}`
             : "按 status != deleted 计算"}
@@ -63,7 +63,7 @@ export function SectionKpi({ snapshot }: Props) {
       <div className="stat-tile">
         <div className="stat-label">累计花费</div>
         <div className="stat-num">{formatCny(cost.totalCost)}</div>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-white/50">
           {cost.logCount > 0 ? `${cost.logCount} 条调用记录` : "暂无调用记录"}
         </div>
       </div>
@@ -73,21 +73,25 @@ export function SectionKpi({ snapshot }: Props) {
         <div className="stat-label">本月花费</div>
         <div className="stat-num">{formatCny(cost.monthCost)}</div>
         <div className="space-y-1.5">
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
             <div
-              className={`h-full ${barColor} transition-all`}
-              style={{ width: barWidth }}
+              className="h-full transition-all"
+              style={{
+                width: barWidth,
+                background: barColor,
+                boxShadow: `0 0 8px ${barColor}80`,
+              }}
             />
           </div>
-          <div className="text-xs text-gray-500 flex items-center justify-between">
+          <div className="text-xs text-white/50 flex items-center justify-between">
             <span>预算 ¥{cost.budget}</span>
             <span
               className={
                 overBudget
                   ? "stat-delta-down font-medium"
                   : warnBudget
-                    ? "text-amber-600 font-medium"
-                    : "text-emerald-600"
+                    ? "text-amber-400 font-medium"
+                    : "text-emerald-400"
               }
             >
               {Math.round(cost.pct * 100)}%

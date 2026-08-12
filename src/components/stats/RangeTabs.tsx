@@ -19,7 +19,13 @@ export function RangeTabs({ current }: { current: RangeKey }) {
   const pathname = usePathname();
 
   return (
-    <div className="inline-flex gap-1 p-1 bg-gray-100 rounded-lg">
+    <div
+      className="inline-flex gap-1 p-1 rounded-lg"
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
       {OPTIONS.map((opt) => {
         const active = current === opt.key;
         return (
@@ -29,9 +35,17 @@ export function RangeTabs({ current }: { current: RangeKey }) {
             onClick={() => router.replace(`${pathname}?range=${opt.key}`)}
             className={`px-3 py-1 text-sm rounded-md transition ${
               active
-                ? "bg-white text-brand-600 font-medium shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                ? "text-white font-medium"
+                : "text-white/50 hover:text-white"
             }`}
+            style={
+              active
+                ? {
+                    background: "linear-gradient(135deg, #2C5BFF 0%, #A855F7 100%)",
+                    boxShadow: "0 2px 8px -2px rgba(168,85,247,0.5)",
+                  }
+                : undefined
+            }
           >
             {opt.label}
           </button>

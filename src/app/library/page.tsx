@@ -33,7 +33,6 @@ export default async function LibraryPage({ searchParams }: PageProps) {
   let totalForStyle = 0;
 
   try {
-    // 各风格的文章数（用于 tab 角标）
     const styleRows = await db.all<{ style: string; cnt: number }>(
       `SELECT COALESCE(NULLIF(style, ''), '未分类') AS style, COUNT(*) AS cnt
        FROM articles
@@ -43,7 +42,6 @@ export default async function LibraryPage({ searchParams }: PageProps) {
     );
     allStyles = styleRows;
 
-    // 当前 style 的总数
     const countRow = await db.get<{ cnt: number }>(
       currentStyle === "all"
         ? "SELECT COUNT(*) AS cnt FROM articles WHERE status != 'deleted'"
@@ -54,7 +52,6 @@ export default async function LibraryPage({ searchParams }: PageProps) {
     );
     totalForStyle = Number(countRow?.cnt ?? 0);
 
-    // 当前页数据
     articles = await db.all(
       currentStyle === "all"
         ? `SELECT id, uuid, title, content, style, source_type, source_ref,
@@ -81,16 +78,45 @@ export default async function LibraryPage({ searchParams }: PageProps) {
   const totalPages = Math.max(1, Math.ceil(totalForStyle / PAGE_SIZE));
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-[#0a0a0f] text-white scrollbar-hide">
+      {/* 暗底柔和渐变光晕（区别于首页的强 Aurora，这里克制一点） */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{
+          background: `
+            radial-gradient(ellipse 60% 40% at 80% -10%, rgba(168, 85, 247, 0.18) 0%, transparent 60%),
+            radial-gradient(ellipse 50% 40% at 0% 100%, rgba(44, 91, 255, 0.14) 0%, transparent 60%)
+          `,
+        }}
+      />
+
+      <div className="relative max-w-6xl mx-auto px-6 py-8">
       {/* Header */}
-      <div className="flex items-end justify-between mb-6">
+      <div className="flex items-end justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold">📚 我的作品库</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="font-serif text-3xl text-white flex items-center gap-2.5">
+            <span
+              className="inline-block w-1.5 h-7 rounded-full"
+              style={{
+                background: "linear-gradient(180deg, #6E8CFF 0%, #A855F7 100%)",
+                boxShadow: "0 0 12px rgba(168,85,247,0.6)",
+              }}
+            />
+            📚 我的作品库
+          </h1>
+          <p className="text-sm text-white/50 mt-2">
             共 {totalForStyle} 篇 · 第 {currentPage} / {totalPages} 页
           </p>
         </div>
-        <Link href="/" className="btn-primary">
+        <Link
+          href="/"
+          className="text-sm px-4 py-2 rounded-lg font-medium text-white transition-all duration-300 hover:-translate-y-0.5"
+          style={{
+            background: "linear-gradient(135deg, #2C5BFF 0%, #A855F7 100%)",
+            boxShadow: "0 4px 16px -4px rgba(168,85,247,0.5)",
+          }}
+        >
           + 新建
         </Link>
       </div>
@@ -108,14 +134,27 @@ export default async function LibraryPage({ searchParams }: PageProps) {
               <Link
                 key={a.id}
                 href={`/write/${a.id}`}
-                className="card p-5 hover:border-brand-300 hover:shadow-md transition group flex flex-col"
+                className="group relative p-5 rounded-xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(168,85,247,0.4)]"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                }}
               >
+                {/* hover 左侧渐变条 */}
+                <span
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-0 bg-gradient-to-b from-accent-400 to-purple-500 rounded-r transition-all duration-300 group-hover:h-12"
+                  style={{ boxShadow: "0 0 10px rgba(110,140,255,0.7)" }}
+                  aria-hidden
+                />
+
                 {/* 顶部：图标 + 标题 */}
                 <div className="flex items-start gap-2 mb-2">
                   <span className="text-lg shrink-0">{isArchived ? "✅" : "📝"}</span>
                   <h3
-                    className={`font-medium leading-snug line-clamp-2 group-hover:text-brand-600 transition ${
-                      isArchived ? "text-gray-500" : "text-gray-900"
+                    className={`font-medium leading-snug line-clamp-2 transition ${
+                      isArchived ? "text-white/50" : "text-white group-hover:text-accent-300"
                     }`}
                     title={a.title}
                   >
@@ -124,26 +163,26 @@ export default async function LibraryPage({ searchParams }: PageProps) {
                 </div>
 
                 {/* 预览 */}
-                <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed mb-4 min-h-[3.6em]">
+                <p className="text-xs text-white/50 line-clamp-3 leading-relaxed mb-4 min-h-[3.6em]">
                   {preview || "（暂无正文）"}
                 </p>
 
                 {/* 底部元信息 */}
                 <div className="mt-auto flex items-center gap-2 flex-wrap text-xs">
                   {a.style && (
-                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                    <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-400/20">
                       {a.style}
                     </span>
                   )}
                   {isArchived && (
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/20">
                       已归档
                     </span>
                   )}
-                  <span className="text-gray-400 ml-auto tabular-nums">
+                  <span className="text-white/40 ml-auto tabular-nums">
                     {a.word_count || 0} 字
                   </span>
-                  <span className="text-gray-400 tabular-nums">
+                  <span className="text-white/40 tabular-nums">
                     {formatTimeAgo(a.updated_at)}
                   </span>
                 </div>
@@ -152,15 +191,28 @@ export default async function LibraryPage({ searchParams }: PageProps) {
           })}
         </div>
       ) : (
-        <div className="card p-12 text-center mt-6">
+        <div
+          className="rounded-xl p-12 text-center mt-6"
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
           <div className="text-5xl mb-3">📝</div>
-          <h3 className="text-lg font-medium mb-2">
+          <h3 className="text-lg font-medium mb-2 text-white">
             {currentStyle === "all" ? "还没有文章" : `还没有「${currentStyle}」风格的文章`}
           </h3>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-white/50 mb-4">
             在首页输入主题，让 Agent 帮你调研 + 写作
           </p>
-          <Link href="/" className="btn-primary">
+          <Link
+            href="/"
+            className="inline-block text-sm px-4 py-2 rounded-lg font-medium text-white transition-all duration-300 hover:-translate-y-0.5"
+            style={{
+              background: "linear-gradient(135deg, #2C5BFF 0%, #A855F7 100%)",
+              boxShadow: "0 4px 16px -4px rgba(168,85,247,0.5)",
+            }}
+          >
             开始写第一篇
           </Link>
         </div>
@@ -168,7 +220,7 @@ export default async function LibraryPage({ searchParams }: PageProps) {
 
       {/* 分页 */}
       {totalPages > 1 && (
-        <div className="mt-8">
+        <div className="mt-10">
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
@@ -176,6 +228,7 @@ export default async function LibraryPage({ searchParams }: PageProps) {
           />
         </div>
       )}
+    </div>
     </div>
   );
 }

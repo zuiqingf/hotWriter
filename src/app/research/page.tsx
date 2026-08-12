@@ -210,20 +210,40 @@ function ResearchContent() {
   }, [auto, status, result]);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-[#0a0a0f] text-white scrollbar-hide">
+      {/* 暗底柔光（克制版） */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{
+          background: `
+            radial-gradient(ellipse 60% 40% at 100% 0%, rgba(236, 72, 153, 0.14) 0%, transparent 60%),
+            radial-gradient(ellipse 50% 40% at 0% 100%, rgba(110, 140, 255, 0.12) 0%, transparent 60%)
+          `,
+        }}
+      />
+
+      <div className="relative max-w-4xl mx-auto px-6 py-8">
       <Link
         href="/"
-        className="text-sm text-gray-500 hover:text-gray-700 mb-3 inline-block"
+        className="text-sm text-white/50 hover:text-white mb-4 inline-block transition"
       >
         ← 返回首页
       </Link>
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
+          <h1 className="font-serif text-3xl text-white flex items-center gap-2.5">
+            <span
+              className="inline-block w-1.5 h-7 rounded-full"
+              style={{
+                background: "linear-gradient(180deg, #6E8CFF 0%, #A855F7 100%)",
+                boxShadow: "0 0 12px rgba(168,85,247,0.6)",
+              }}
+            />
             🔍 关键词调研
           </h1>
-          <div className="text-lg text-gray-700 mt-1 font-medium">
+          <div className="text-lg text-white/80 mt-2 font-medium">
             「{keyword}」
           </div>
         </div>
@@ -233,7 +253,7 @@ function ResearchContent() {
               startedRef.current = true; // 允许重新启动（useEffect 依赖 keyword 不变不会再跑）
               startResearch();
             }}
-            className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="text-xs px-3 py-1.5 border border-white/10 rounded-lg text-white/70 hover:text-white hover:bg-white/[0.05] hover:border-white/20 transition"
           >
             🔄 重新调研
           </button>
@@ -251,7 +271,7 @@ function ResearchContent() {
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-sm text-red-700">
+        <div className="bg-red-500/10 border border-red-400/30 rounded-xl p-4 mb-6 text-sm text-red-300">
           ❌ {error}
         </div>
       )}
@@ -260,13 +280,20 @@ function ResearchContent() {
       {result?.directions && result.directions.length > 0 && (
         <>
           {result.summary && (
-            <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 mb-6 text-sm">
-              <div className="font-medium text-brand-900 mb-1">💡 调研结论</div>
-              <div className="text-brand-800">{result.summary}</div>
+            <div
+              className="rounded-xl p-4 mb-6 text-sm"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(110,140,255,0.10), rgba(168,85,247,0.10))",
+                border: "1px solid rgba(168,85,247,0.25)",
+              }}
+            >
+              <div className="font-medium text-white mb-1">💡 调研结论</div>
+              <div className="text-white/80">{result.summary}</div>
             </div>
           )}
 
-          <h2 className="font-medium mb-3 text-gray-700">
+          <h2 className="font-medium mb-3 text-white/70">
             找到 {result.directions.length} 个写作方向
           </h2>
 
@@ -276,11 +303,21 @@ function ResearchContent() {
             {result.directions.map((d, idx) => (
               <label
                 key={idx}
-                className={`block card p-5 cursor-pointer transition ${
+                className={`block rounded-xl p-5 cursor-pointer transition-all duration-300 ${
                   selectedDirection === idx
-                    ? "ring-2 ring-brand-500 border-brand-300"
-                    : "hover:shadow-sm"
+                    ? "shadow-[0_0_0_2px_rgba(168,85,247,0.6),0_20px_60px_-15px_rgba(168,85,247,0.4)]"
+                    : "hover:shadow-[0_10px_30px_-10px_rgba(110,140,255,0.25)]"
                 }`}
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: `1px solid ${
+                    selectedDirection === idx
+                      ? "rgba(168,85,247,0.5)"
+                      : "rgba(255,255,255,0.08)"
+                  }`,
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                }}
               >
                 <input
                   type="radio"
@@ -295,48 +332,48 @@ function ResearchContent() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-brand-100 text-brand-700 font-medium">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-400/20 font-medium">
                         方向 {d.index}
                       </span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-400/20">
                         {d.angle}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-white/50">
                         ~{d.word_count} 字 · {d.tone}
                       </span>
                     </div>
-                    <h3 className="text-lg font-semibold mb-1">{d.title}</h3>
+                    <h3 className="text-lg font-semibold mb-1 text-white">{d.title}</h3>
                     {d.title_alt && (
-                      <div className="text-xs text-gray-500 mb-2">
+                      <div className="text-xs text-white/40 mb-2">
                         备选：{d.title_alt}
                       </div>
                     )}
-                    <div className="text-xs text-gray-500 mb-2">
+                    <div className="text-xs text-white/50 mb-2">
                       👥 {d.target_audience}
                     </div>
-                    <div className="text-sm text-gray-700 mb-3 italic">
+                    <div className="text-sm text-white/80 mb-3 italic">
                       {d.rationale}
                     </div>
                     <details className="text-xs">
-                      <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+                      <summary className="cursor-pointer text-white/50 hover:text-white transition">
                         查看提纲与素材
                       </summary>
                       <div className="mt-2 pl-3 space-y-2">
                         <div>
-                          <div className="font-medium mb-1">📑 提纲</div>
+                          <div className="font-medium mb-1 text-white/70">📑 提纲</div>
                           <ol className="space-y-0.5">
                             {d.outline.map((o, i) => (
-                              <li key={i} className="text-gray-600">
+                              <li key={i} className="text-white/70">
                                 {i + 1}. {o}
                               </li>
                             ))}
                           </ol>
                         </div>
                         <div>
-                          <div className="font-medium mb-1">📎 素材</div>
+                          <div className="font-medium mb-1 text-white/70">📎 素材</div>
                           <ul className="space-y-0.5">
                             {d.key_materials?.map((m, i) => (
-                              <li key={i} className="text-gray-600">
+                              <li key={i} className="text-white/70">
                                 • {m}
                               </li>
                             ))}
@@ -351,8 +388,11 @@ function ResearchContent() {
           </div>
 
           {/* 底部操作栏 */}
-          <div className="sticky bottom-0 mt-8 -mx-6 px-6 py-4 bg-white border-t border-gray-200 flex items-center justify-between">
-            <div className="text-xs text-gray-500">
+          <div
+            className="sticky bottom-0 mt-8 -mx-6 px-6 py-4 border-t border-white/10 flex items-center justify-between backdrop-blur-xl"
+            style={{ background: "rgba(10,10,15,0.85)" }}
+          >
+            <div className="text-xs text-white/50">
               调研成本 ¥{result.cost?.totalCny} ·{" "}
               {steps.filter((s) => s.type === "search").length} 次检索
             </div>
@@ -361,7 +401,11 @@ function ResearchContent() {
               disabled={
                 !result?.directions?.length || creatingArticle
               }
-              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-sm px-4 py-2 rounded-lg font-medium text-white transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+              style={{
+                background: "linear-gradient(135deg, #2C5BFF 0%, #A855F7 100%)",
+                boxShadow: "0 4px 16px -4px rgba(168,85,247,0.5)",
+              }}
             >
               {creatingArticle ? "创建中..." : "✍️ 开始写这篇"}
             </button>
@@ -370,10 +414,11 @@ function ResearchContent() {
       )}
 
       {!result?.directions && status === "done" && !error && (
-        <div className="text-center py-8 text-gray-400 text-sm">
+        <div className="text-center py-8 text-white/40 text-sm">
           未能生成调研结果，请重试
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -398,7 +443,7 @@ function detectStyle(angle: string): string {
 
 export default function ResearchPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-gray-400">加载中...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f] text-white/40 p-8 text-center">加载中...</div>}>
       <ResearchContent />
     </Suspense>
   );
@@ -426,43 +471,60 @@ function ResearchProgress({
   const progress = Math.round((rounds / maxRounds) * 100);
 
   return (
-    <div className="mb-6 rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/70 to-white shadow-sm">
+    <div
+      className="mb-6 rounded-xl shadow-sm"
+      style={{
+        background:
+          "linear-gradient(135deg, rgba(110,140,255,0.08), rgba(168,85,247,0.06))",
+        border: "1px solid rgba(168,85,247,0.25)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+      }}
+    >
       {/* 折叠按钮 / 摘要区 */}
       <button
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-violet-50/40 transition"
+        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/[0.04] transition rounded-xl"
       >
         {/* 状态点 */}
         <span className="relative shrink-0">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span
+            className="absolute w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping opacity-75"
+          />
+          <span className="relative w-2.5 h-2.5 rounded-full bg-emerald-400" />
         </span>
 
         {/* 主信息 */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-gray-800">Agent 调研中</span>
-            <span className="text-gray-400 text-xs">
+            <span className="font-medium text-white">Agent 调研中</span>
+            <span className="text-white/40 text-xs">
               · 已搜 {searchCount} 次 / 最多 {maxRounds} 轮
             </span>
           </div>
-          <div className="text-xs text-gray-500 truncate mt-0.5">{lastMessage}</div>
+          <div className="text-xs text-white/60 truncate mt-0.5">{lastMessage}</div>
         </div>
 
         {/* 折叠箭头 */}
-        <span className="text-gray-400 text-xs px-2 py-1 rounded border border-gray-200 shrink-0">
+        <span className="text-white/40 text-xs px-2 py-1 rounded border border-white/10 shrink-0">
           {showSteps ? "隐藏 ▲" : "展开 ▼"}
         </span>
       </button>
 
       {/* 进度条 */}
       <div className="px-4 pb-3">
-        <div className="h-1 bg-violet-100 rounded-full overflow-hidden">
+        <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
+            className="h-full transition-all duration-300 ease-out"
+            style={{
+              width: `${progress}%`,
+              background:
+                "linear-gradient(90deg, #6E8CFF 0%, #A855F7 100%)",
+              boxShadow: "0 0 8px rgba(168,85,247,0.5)",
+            }}
           />
         </div>
-        <div className="flex items-center justify-between mt-1.5 text-[11px] text-gray-400">
+        <div className="flex items-center justify-between mt-1.5 text-[11px] text-white/40">
           <span>第 {rounds} / {maxRounds} 轮</span>
           <span>{progress}%</span>
         </div>
@@ -470,10 +532,10 @@ function ResearchProgress({
 
       {/* 展开的完整步骤 */}
       {showSteps && (
-        <div className="px-4 pb-4 pt-2 border-t border-violet-200">
-          <div className="max-h-72 overflow-y-auto rounded-lg bg-white border border-violet-100 p-3 space-y-1.5 text-[13px] text-gray-700">
+        <div className="px-4 pb-4 pt-2 border-t border-white/10">
+          <div className="max-h-72 overflow-y-auto rounded-lg bg-black/30 border border-white/10 p-3 space-y-1.5 text-[13px] text-white/80 scrollbar-hide">
             {steps.length === 0 && (
-              <div className="text-gray-400 text-xs">准备中…</div>
+              <div className="text-white/40 text-xs">准备中…</div>
             )}
             {steps.map((s, i) => (
               <div key={i} className="leading-relaxed">

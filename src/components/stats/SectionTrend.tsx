@@ -31,18 +31,17 @@ export function SectionTrend({ snapshot }: Props) {
     words: r.wordSum,
   }));
 
-  // ym 太长，截短成 "M月"
   const shortYmd = (ym: string) => {
     const [y, m] = ym.split("-");
     return `${parseInt(m, 10)}月`;
   };
 
   return (
-    <section className="card p-5">
+    <section className="stat-tile">
       <div className="flex items-end justify-between mb-4">
         <div>
-          <h3 className="font-semibold text-gray-900">📈 月度趋势</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h3 className="font-semibold text-white">📈 月度趋势</h3>
+          <p className="text-xs text-white/50 mt-0.5">
             按文章关联的 usage_logs 聚合
           </p>
         </div>
@@ -53,27 +52,36 @@ export function SectionTrend({ snapshot }: Props) {
         <div className="lg:col-span-2 min-w-0">
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
               <XAxis
                 dataKey="ym"
                 tickFormatter={shortYmd}
-                stroke="#9ca3af"
+                stroke="rgba(255,255,255,0.4)"
                 fontSize={11}
               />
               <YAxis
                 yAxisId="left"
-                stroke="#6366f1"
+                stroke="#A855F7"
                 fontSize={11}
                 tickFormatter={(v) => `¥${v}`}
               />
               <YAxis
                 yAxisId="right"
                 orientation="right"
-                stroke="#10b981"
+                stroke="#38BDF8"
                 fontSize={11}
               />
               <Tooltip
-                cursor={{ fill: "rgba(99,102,241,0.06)" }}
+                cursor={{ fill: "rgba(168,85,247,0.10)" }}
+                contentStyle={{
+                  background: "rgba(10,10,15,0.92)",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  borderRadius: 8,
+                  color: "#fff",
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+                itemStyle={{ color: "#fff" }}
                 formatter={(value: any, name: any) => {
                   if (name === "cost") return [`¥${value}`, "花费"];
                   if (name === "articles") return [value, "文章数"];
@@ -83,34 +91,34 @@ export function SectionTrend({ snapshot }: Props) {
               />
               <Legend
                 formatter={(v) => (v === "cost" ? "花费 (¥)" : "文章数")}
-                wrapperStyle={{ fontSize: 12 }}
+                wrapperStyle={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}
               />
               <Line
                 yAxisId="left"
                 type="monotone"
                 dataKey="cost"
-                stroke="#6366f1"
+                stroke="#A855F7"
                 strokeWidth={2}
-                dot={{ r: 3 }}
-                activeDot={{ r: 5 }}
+                dot={{ r: 3, fill: "#A855F7" }}
+                activeDot={{ r: 5, fill: "#fff" }}
               />
               <Line
                 yAxisId="right"
                 type="monotone"
                 dataKey="articles"
-                stroke="#10b981"
+                stroke="#38BDF8"
                 strokeWidth={2}
-                dot={{ r: 3 }}
-                activeDot={{ r: 5 }}
+                dot={{ r: 3, fill: "#38BDF8" }}
+                activeDot={{ r: 5, fill: "#fff" }}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
         {/* 右侧：明细表 */}
-        <div className="overflow-y-auto max-h-[320px] min-h-[320px]">
+        <div className="overflow-y-auto max-h-[320px] min-h-[320px] scrollbar-hide">
           <table className="w-full text-xs">
-            <thead className="text-gray-500 border-b border-gray-100">
+            <thead className="text-white/40 border-b border-white/10">
               <tr>
                 <th className="text-left py-2 pr-2 font-medium">月份</th>
                 <th className="text-right py-2 px-2 font-medium">篇</th>
@@ -118,16 +126,16 @@ export function SectionTrend({ snapshot }: Props) {
                 <th className="text-right py-2 pl-2 font-medium">¥</th>
               </tr>
             </thead>
-            <tbody className="text-gray-700">
+            <tbody className="text-white/80">
               {data.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-4 text-center text-gray-400">
+                  <td colSpan={4} className="py-4 text-center text-white/30">
                     暂无数据
                   </td>
                 </tr>
               ) : (
                 data.map((r) => (
-                  <tr key={r.ym} className="border-b border-gray-50 last:border-0">
+                  <tr key={r.ym} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.04] transition">
                     <td className="py-2 pr-2 font-mono">{r.ym}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{r.articles}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{r.words.toLocaleString()}</td>
