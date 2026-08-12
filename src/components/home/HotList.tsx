@@ -178,13 +178,13 @@ export function HotList({ initialData }: HotListProps) {
                       >
                         {item.title}
                       </a>
-                      {/* 一键写图标按钮：默认透明，hover 时滑入 */}
+                      {/* 一键写图标按钮：默认半透明可见（避免 hover-only 导致触屏/快速划过点不到），hover 时高亮 */}
                       <Link
                         href={`/research?keyword=${encodeURIComponent(item.title)}&source=${p}&url=${encodeURIComponent(item.url)}&auto=1`}
                         className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center
                                    text-base hover:text-brand-600 hover:bg-brand-50
-                                   opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
-                                   transition-all duration-150"
+                                   opacity-30 group-hover:opacity-100
+                                   transition-opacity duration-150"
                         title="一键写：立刻基于这个热点让 AI 写文章"
                         aria-label="一键写"
                       >

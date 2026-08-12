@@ -43,6 +43,23 @@
     @apply bg-white border border-gray-200 rounded-xl;
   }
 
+  /* 统计页：KPI 数字 tile */
+  .stat-tile {
+    @apply card p-5 hover:border-brand-200 transition flex flex-col gap-2;
+  }
+  .stat-num {
+    @apply text-3xl font-semibold text-gray-900 tabular-nums;
+  }
+  .stat-label {
+    @apply text-xs text-gray-500 uppercase tracking-wide font-medium;
+  }
+  .stat-delta-up {
+    @apply text-emerald-600;
+  }
+  .stat-delta-down {
+    @apply text-red-600;
+  }
+
   /* 写作编辑器：衬线字体，长文舒适 */
   .prose-textarea {
     font-family:
