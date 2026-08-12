@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { href: "/", label: "首页" },
   { href: "/library", label: "作品库" },
+  { href: "/stats", label: "统计" },
 ];
 
 export function Header() {
