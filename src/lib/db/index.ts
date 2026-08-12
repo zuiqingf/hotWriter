@@ -15,13 +15,6 @@
 import mysql from "mysql2/promise";
 import { CREATE_TABLES_SQL } from "./schema";
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  throw new Error(
-    "[db] DATABASE_URL 未设置。本地开发请确认 .env 文件存在（参考 .env.example）；"
-  );
-}
-
 const globalForDb = globalThis as unknown as { _pool?: mysql.Pool };
 
 let initPromise: Promise<void> | null = null;
@@ -42,8 +35,8 @@ function parseDbName(url: string): { urlWithoutDb: string; dbName: string } {
   return { urlWithoutDb: base, dbName: m[2] };
 }
 
-async function ensureDatabaseAndSchema(): Promise<void> {
-  const { urlWithoutDb, dbName } = parseDbName(DATABASE_URL);
+async function ensureDatabaseAndSchema(url: string): Promise<void> {
+  const { urlWithoutDb, dbName } = parseDbName(url);
 
   // 1) 用「不指定库」的连接 CREATE DATABASE
   const bootstrap = await mysql.createConnection({
@@ -73,9 +66,9 @@ async function ensureDatabaseAndSchema(): Promise<void> {
   }
 }
 
-function createPool(): mysql.Pool {
+function createPool(url: string): mysql.Pool {
   return mysql.createPool({
-    uri: DATABASE_URL,
+    uri: url,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -87,8 +80,14 @@ function createPool(): mysql.Pool {
 
 export function getPool(): mysql.Pool {
   if (!globalForDb._pool) {
-    globalForDb._pool = createPool();
-    initPromise = ensureDatabaseAndSchema().catch((e) => {
+    const url = process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error(
+        "[db] DATABASE_URL 未设置。本地开发请确认 .env 文件存在（参考 .env.example）；"
+      );
+    }
+    globalForDb._pool = createPool(url);
+    initPromise = ensureDatabaseAndSchema(url).catch((e) => {
       console.error("[db] 初始化失败:", e);
       throw e;
     });
