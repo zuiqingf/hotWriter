@@ -50,6 +50,12 @@ export interface RichEditorHandle {
   getRange: () => { from: number; to: number } | null;
   /** 从外部触发 AI 改写（用于顶部 AI 入口） */
   runAiEditFromOutside: (action: string, label: string) => Promise<void>;
+  /**
+   * 在文档中查找 original 首次出现的位置，替换为 fix。
+   * 返回 true=成功替换；false=未找到匹配位置（调用方负责 Toast 提示）。
+   * 用于合规校验面板的"一键应用 fix"。
+   */
+  applyFixByText: (original: string, fix: string) => boolean;
 }
 
 // AI 预览窗口的状态
@@ -459,6 +465,92 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(function
     },
     runAiEditFromOutside: async (action: string, label: string) => {
       await runAiEdit(action, label);
+    },
+    applyFixByText: (original: string, fix: string): boolean => {
+      if (!editor || !original) return false;
+
+      const { doc } = editor.state;
+      // separator 用 "" 避免 textBetween 在节点边界插入换行破坏匹配
+      const fullText = doc.textBetween(0, doc.content.size, "", "");
+
+      // 三级 fallback 定位 original 在 fullText 中的索引
+      // 返回值：找到的索引；null = 全部失败
+      const findIdx = (raw: string, pat: string): number | null => {
+        // 1) 精确匹配
+        let i = raw.indexOf(pat);
+        if (i !== -1) return i;
+        // 2) 折叠空白后匹配（处理 \n、\t、连续空格）
+        const collapse = (s: string) => s.replace(/\s+/g, " ");
+        const normRaw = collapse(raw);
+        const normPat = collapse(pat);
+        const ni = normRaw.indexOf(normPat);
+        if (ni !== -1) {
+          // 在原始 raw 中找：从 ni 附近开始搜索
+          const approx = raw.indexOf(pat.replace(/\s+/g, " "), Math.max(0, ni - 10));
+          if (approx !== -1) return approx;
+        }
+        // 3) 去首尾装饰字符（书名号「」、引号、括号、空白）
+        const strip = (s: string) =>
+          s.replace(/^[\s　「」『』《》""''()（）\[\]【】]+|[\s　「」『』《》""''()（）\[\]【】]+$/g, "");
+        const sRaw = strip(raw);
+        const sPat = strip(pat);
+        const si = sRaw.indexOf(sPat);
+        if (si !== -1) {
+          const approx = raw.indexOf(pat, Math.max(0, si - 10));
+          if (approx !== -1) return approx;
+        }
+        return null;
+      };
+
+      const idx = findIdx(fullText, original);
+      if (idx === null) {
+        if (typeof console !== "undefined") {
+          console.warn("[applyFixByText] 三级匹配均失败", {
+            original: original.slice(0, 80),
+            docLen: fullText.length,
+            docPreview: fullText.slice(0, 200),
+          });
+        }
+        return false;
+      }
+
+      // 把 textContent 偏移转回 ProseMirror pos
+      let fromPos: number | null = null;
+      let toPos: number | null = null;
+      let acc = 0;
+      const matchLen = original.length;
+      doc.descendants((node, pos) => {
+        if (fromPos !== null) return false;
+        if (node.isText) {
+          const text = node.text || "";
+          const start = acc;
+          const end = acc + text.length;
+          if (start <= idx && idx < end) {
+            fromPos = pos + (idx - start);
+          }
+          if (start < idx + matchLen && idx + matchLen <= end) {
+            toPos = pos + (idx + matchLen - start);
+            return false;
+          }
+          acc = end;
+        }
+        return true;
+      });
+
+      // 跨多 text node 时 toPos 可能为 null：用 toPos 退化为 fromPos + matchLen
+      // （Tiptap 会自动按字符数扩展选择，覆盖跨节点情况）
+      const finalTo = toPos ?? fromPos! + matchLen;
+      if (fromPos === null) return false;
+
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: fromPos, to: finalTo })
+        .deleteSelection()
+        .insertContent(fix)
+        .run();
+
+      return true;
     },
   }));
 

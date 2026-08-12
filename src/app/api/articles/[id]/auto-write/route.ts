@@ -174,6 +174,20 @@ ${extraInstructions ? `## 额外要求\n${extraInstructions}\n` : ""}
         wordCount: direction?.word_count ?? 1200,
       });
 
+      // 持久化 write_start 事件气泡（这样重新进入页面时也能看到完整对话历史）
+      try {
+        await db.run(
+          "INSERT INTO chat_messages (article_id, role, content) VALUES (?, ?, ?)",
+          [
+            articleId,
+            "event",
+            `✨ Agent 写作\n按调研方向生成全文...\n📐 方向：${direction?.title || "推荐"}\n🎨 风格：${style}\n📊 字数目标：约 ${direction?.word_count ?? 1200} 字`,
+          ]
+        );
+      } catch (e) {
+        console.warn("持久化 write_start 失败:", e);
+      }
+
       try {
         const client = getLLMClient();
 
@@ -205,12 +219,19 @@ ${extraInstructions ? `## 额外要求\n${extraInstructions}\n` : ""}
         // 6. 把生成结果写回 article.content
         await writeBack(articleId, title, fullContent, style, controller);
 
+        // 同步读取最新 title（writeBack 可能更新了它），用于版本快照
+        const fresh = await db.get<{ title: string }>(
+          "SELECT title FROM articles WHERE id = ?",
+          [articleId]
+        );
+        const snapshotTitle = fresh?.title ?? title;
+
         inputTokens = Math.ceil(JSON.stringify(messages).length / 3);
         outputTokens = Math.ceil(fullContent.length / 2);
         const cost = inputTokens * 0.000001 + outputTokens * 0.000002;
 
-        // 写一条 assistant 消息到 chat_messages
-        await logAssistantMsg(articleId, fullContent);
+        // 把"自动写完成"作为一个版本写入 article_versions（title 用当前文章标题，不是 null）
+        await logAutoWriteVersion(articleId, fullContent, snapshotTitle);
 
         await logUsage({
           action: "write",
@@ -222,12 +243,38 @@ ${extraInstructions ? `## 额外要求\n${extraInstructions}\n` : ""}
           articleId,
         });
 
+        // 持久化 assistant 完整回复（重新进入 write 页能复现当时的对话）
+        try {
+          await db.run(
+            "INSERT INTO chat_messages (article_id, role, content) VALUES (?, ?, ?)",
+            [articleId, "assistant", fullContent]
+          );
+          // 持久化 write_done 事件气泡
+          await db.run(
+            "INSERT INTO chat_messages (article_id, role, content) VALUES (?, ?, ?)",
+            [
+              articleId,
+              "event",
+              `✅ 已生成 ${fullContent.length} 字 · 已保存到数据库`,
+            ]
+          );
+        } catch (e) {
+          console.warn("持久化 write 结果失败:", e);
+        }
+
         send("complete", {
           fullContent,
           durationMs: Date.now() - startTime,
         });
       } catch (err: any) {
         send("error", { message: err.message });
+        // 持久化错误事件
+        try {
+          await db.run(
+            "INSERT INTO chat_messages (article_id, role, content) VALUES (?, ?, ?)",
+            [articleId, "event", `❌ Agent 写作失败：${err.message}`]
+          );
+        } catch {}
       } finally {
         controller.close();
       }
@@ -265,12 +312,12 @@ async function writeBack(
   }
 }
 
-async function logAssistantMsg(articleId: number, content: string) {
+async function logAutoWriteVersion(articleId: number, content: string, title: string) {
   try {
     await db.run(
       `INSERT INTO article_versions (article_id, content, title, \`trigger\`)
        VALUES (?, ?, ?, ?)`,
-      [articleId, content, null, "auto_write"]
+      [articleId, content, title, "auto_write"]
     );
   } catch (err) {
     console.warn("记录自动写历史失败:", err);

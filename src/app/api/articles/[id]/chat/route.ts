@@ -25,9 +25,13 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   const article = await db.get("SELECT * FROM articles WHERE id = ?", [articleId]);
   if (!article) return new Response("not found", { status: 404 });
 
-  // 历史消息
+  // 历史消息：只取 LLM 认识的 role（user/assistant/system）。
+  // 之前 auto-write 写入的 role='event'（✨/✅/❌ UI 提示）属于装饰气泡，
+  // 不能喂给 LLM —— OpenAI/Anthropic API 会直接报 400 unknown variant。
   const history = await db.all(
-    "SELECT * FROM chat_messages WHERE article_id = ? ORDER BY created_at ASC LIMIT 30",
+    `SELECT * FROM chat_messages
+     WHERE article_id = ? AND role IN ('user', 'assistant', 'system')
+     ORDER BY created_at ASC LIMIT 30`,
     [articleId]
   );
 
