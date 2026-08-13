@@ -5,7 +5,7 @@
  *
  * 接 server component 传来的 AnalysisSnapshot，渲染：
  *   - 0 篇 → EmptyHint
- *   - 否则 → SectionHabits + SectionDirections + SectionArticles
+ *   - 否则 → SectionHabits + SectionArticles
  *
  * 文章列表里点「查看分析 / 重新分析」→ 走 SSE → ArticleProgress / Cache →
  * SectionArticles 就地把 AnalysisPanel 渲染在该 li 下方。
@@ -22,7 +22,6 @@ import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { AnalysisSnapshot } from "@/lib/analysis/queries";
 import { SectionHabits } from "./SectionHabits";
-import { SectionDirections } from "./SectionDirections";
 import {
   SectionArticles,
   type ArticleProgress,
@@ -257,7 +256,6 @@ export function AnalysisClient({ snapshot }: Props) {
     return (
       <div className="space-y-6">
         <SectionHabits snapshot={snapshot} />
-        <SectionDirections snapshot={snapshot} />
         <SectionArticles
           snapshot={snapshot}
           analyzingId={analyzingId}
@@ -291,7 +289,6 @@ export function AnalysisClient({ snapshot }: Props) {
   return (
     <div className="space-y-6">
       <SectionHabits snapshot={snapshot} />
-      <SectionDirections snapshot={snapshot} />
       <SectionArticles
         snapshot={snapshot}
         analyzingId={analyzingId}

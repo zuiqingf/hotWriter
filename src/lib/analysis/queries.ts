@@ -24,13 +24,6 @@ export interface HabitsSummary {
   daily: DailyBucket[];      // 周一到周日
 }
 
-export interface DirectionBucket {
-  direction: string;
-  cnt: number;
-  wordSum: number;
-  pct: number;              // 占比，0-100
-}
-
 export interface RecentArticle {
   id: number;
   title: string;
@@ -47,7 +40,6 @@ export interface AnalysisSnapshot {
   range: { key: "7d" | "30d" | "all"; label: string; sinceTs: number };
   hasAnyArticle: boolean;
   habits: HabitsSummary;
-  directions: DirectionBucket[];
   recentArticles: RecentArticle[];
 }
 
@@ -87,62 +79,6 @@ export async function getHabits(sinceTs: number): Promise<HabitsSummary> {
     hourly,
     daily,
   };
-}
-
-/* ============ 方向分布 ============ */
-
-export async function getDirectionDistribution(
-  sinceTs: number
-): Promise<DirectionBucket[]> {
-  // 拉最近 100 篇文章 + 关联调研
-  type Row = {
-    id: number;
-    direction_index: number | null;
-    word_count: number;
-    directions: string | null;
-  };
-  const rows = await db.all<Row>(
-    `SELECT a.id, a.direction_index, a.word_count, rs.directions
-     FROM articles a
-     LEFT JOIN research_sessions rs ON rs.article_id = a.id
-     WHERE a.status != 'deleted' AND a.created_at >= ?
-     ORDER BY a.created_at DESC
-     LIMIT 100`,
-    [sinceTs]
-  );
-
-  // 按「方向标题」聚合计数（去重文章）
-  const map = new Map<string, { cnt: number; wordSum: number }>();
-  for (const r of rows) {
-    let title = "未分类";
-    if (r.directions) {
-      try {
-        const dirs = JSON.parse(r.directions) as any[];
-        const wantIdx = (r.direction_index ?? 1) - 1;
-        const picked = wantIdx >= 0 && wantIdx < dirs.length ? dirs[wantIdx] : dirs[0];
-        if (picked?.title) title = String(picked.title);
-      } catch {
-        /* keep 未分类 */
-      }
-    }
-    const cur = map.get(title) || { cnt: 0, wordSum: 0 };
-    cur.cnt += 1;
-    cur.wordSum += Number(r.word_count || 0);
-    map.set(title, cur);
-  }
-
-  const total = rows.length || 1;
-  const out: DirectionBucket[] = Array.from(map.entries())
-    .map(([direction, v]) => ({
-      direction,
-      cnt: v.cnt,
-      wordSum: v.wordSum,
-      pct: Math.round((v.cnt / total) * 100),
-    }))
-    .sort((a, b) => b.cnt - a.cnt)
-    .slice(0, 10);
-
-  return out;
 }
 
 /* ============ 最近 N 篇 + 每篇 latestAnalysis ============ */
@@ -265,9 +201,8 @@ export async function getAnalysisSnapshot(range: {
   label: string;
   sinceTs: number;
 }): Promise<AnalysisSnapshot> {
-  const [habits, directions, recentArticles] = await Promise.all([
+  const [habits, recentArticles] = await Promise.all([
     getHabits(range.sinceTs),
-    getDirectionDistribution(range.sinceTs),
     getRecentArticles(range.sinceTs, 20),
   ]);
 
@@ -275,7 +210,6 @@ export async function getAnalysisSnapshot(range: {
     range,
     hasAnyArticle: recentArticles.length > 0,
     habits,
-    directions,
     recentArticles,
   };
 }
