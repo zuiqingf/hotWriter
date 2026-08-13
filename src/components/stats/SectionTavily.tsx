@@ -27,11 +27,14 @@ interface Props {
 }
 
 const TOOL_META: Record<string, { label: string; emoji: string; color: string }> = {
-  web_search: { label: "Tavily", emoji: "🌐", color: "#A855F7" },     // 紫色，主搜索
-  search_zhihu: { label: "知乎", emoji: "📘", color: "#6E8CFF" },      // 蓝
+  web_search: { label: "Tavily", emoji: "🌐", color: "#A855F7" },        // 紫，主搜索
+  search_zhihu: { label: "知乎", emoji: "📘", color: "#6E8CFF" },         // 蓝
   search_xiaohongshu: { label: "小红书", emoji: "📕", color: "#EC4899" }, // 粉
-  fetch_url: { label: "抓页面", emoji: "📖", color: "#10B981" },        // 绿
-  other: { label: "其他", emoji: "🔧", color: "#64748B" },             // 灰
+  search_baidu: { label: "百度", emoji: "🅱️", color: "#3385FF" },          // 百度蓝
+  search_toutiao: { label: "头条", emoji: "📰", color: "#FF6B35" },        // 头条橙
+  search_wechat: { label: "微信", emoji: "💬", color: "#07C160" },        // 微信绿
+  fetch_url: { label: "抓页面", emoji: "📖", color: "#10B981" },          // 绿
+  other: { label: "其他", emoji: "🔧", color: "#64748B" },                // 灰
 };
 
 const TOOLTIP_STYLE = {

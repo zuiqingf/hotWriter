@@ -12,7 +12,14 @@ import { getLLMClient, MODEL_NAME } from "./client";
 import { AGENT_TOOLS } from "./tools";
 import { SYSTEM_AGENT } from "./prompts";
 import { tavilySearch, formatSearchResults } from "../search/tavily";
-import { searchZhihu, searchXiaohongshu, fetchUrl } from "../search/zhihu";
+import {
+  searchZhihu,
+  searchXiaohongshu,
+  searchBaidu,
+  searchToutiao,
+  searchWechat,
+  fetchUrl,
+} from "../search/zhihu";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 export interface AgentStep {
@@ -187,6 +194,15 @@ export async function runKeywordAgent(options: AgentOptions): Promise<AgentResul
         case "search_xiaohongshu":
           actionLabel = `🔍 小红书搜索：${args.query}`;
           break;
+        case "search_baidu":
+          actionLabel = `🔍 百度搜索：${args.query}`;
+          break;
+        case "search_toutiao":
+          actionLabel = `🔍 头条搜索：${args.query}`;
+          break;
+        case "search_wechat":
+          actionLabel = `🔍 微信搜索：${args.query}`;
+          break;
         case "fetch_url":
           actionLabel = `📖 抓取：${args.url}`;
           break;
@@ -208,6 +224,12 @@ export async function runKeywordAgent(options: AgentOptions): Promise<AgentResul
           toolResult = await searchZhihu(args.query || keyword);
         } else if (fnName === "search_xiaohongshu") {
           toolResult = await searchXiaohongshu(args.query || keyword);
+        } else if (fnName === "search_baidu") {
+          toolResult = await searchBaidu(args.query || keyword);
+        } else if (fnName === "search_toutiao") {
+          toolResult = await searchToutiao(args.query || keyword);
+        } else if (fnName === "search_wechat") {
+          toolResult = await searchWechat(args.query || keyword);
         } else if (fnName === "fetch_url") {
           toolResult = await fetchUrl(args.url || "");
         }

@@ -66,6 +66,48 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_baidu",
+      description: "百度搜索（含百度百科、百度知道、百家号）。用于查权威百科、官方公告、政策解读、时效性新闻。",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "搜索关键词" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_toutiao",
+      description: "今日头条搜索。用于查资讯、观点、热点时效内容；很多热点首发源在头条。",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "搜索关键词" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_wechat",
+      description: "微信公众号文章搜索。用于查深度观点、行业分析、自媒体长文。",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "搜索关键词" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "fetch_url",
       description:
         "抓取指定 URL 的正文内容。用于深入阅读搜索到的某篇文章。注意：只用来读已找到的 URL，不要猜测 URL。",
@@ -83,4 +125,11 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
   },
 ];
 
-export type ToolName = "web_search" | "search_zhihu" | "search_xiaohongshu" | "fetch_url";
+export type ToolName =
+  | "web_search"
+  | "search_zhihu"
+  | "search_xiaohongshu"
+  | "search_baidu"
+  | "search_toutiao"
+  | "search_wechat"
+  | "fetch_url";

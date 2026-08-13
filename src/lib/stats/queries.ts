@@ -62,6 +62,9 @@ export interface StatsSnapshot {
       web_search: number;    // Tavily
       search_zhihu: number;
       search_xiaohongshu: number;
+      search_baidu: number;
+      search_toutiao: number;
+      search_wechat: number;
       fetch_url: number;
       other: number;
     };
@@ -272,6 +275,9 @@ export async function getStatsSnapshot(
     web_search: 0, // Tavily
     search_zhihu: 0,
     search_xiaohongshu: 0,
+    search_baidu: 0,
+    search_toutiao: 0,
+    search_wechat: 0,
     fetch_url: 0,
     other: 0,
   };
