@@ -6,6 +6,9 @@
  * 时段分布柱图（24h）+ 工作日分布（周一~周日）+ 频率统计（活跃天数/总数/平均字数）
  *
  * 纯 SQL 渲染，无需 LLM。
+ *
+ * 配色：所有柱统一用品牌渐变 (#6E8CFF → #A855F7) + 高峰时段（cnt 最大那一格）发亮；
+ * 这样视觉清爽而不是花里胡哨的每根柱不同色（之前那种反而看不清趋势）。
  */
 
 import type { AnalysisSnapshot } from "@/lib/analysis/queries";
@@ -17,24 +20,16 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 
 interface Props {
   snapshot: AnalysisSnapshot;
 }
 
-const HOURLY_COLORS = {
-  // 工作时间 9-18 / 晚高峰 19-22 配色不同，强化视觉
-  work: "#A855F7",
-  evening: "#6E8CFF",
-  night: "rgba(255,255,255,0.25)",
-};
-
-function hourlyColor(hour: number): string {
-  if (hour >= 19 && hour <= 22) return HOURLY_COLORS.evening;
-  if (hour >= 9 && hour <= 18) return HOURLY_COLORS.work;
-  return HOURLY_COLORS.night;
-}
+const BAR_COLOR_NORMAL = "#7B6CE0";   // 中间紫蓝（统一基色）
+const BAR_COLOR_PEAK = "#C084FC";     // 高峰亮紫（突出）
+const BAR_COLOR_EMPTY = "rgba(255,255,255,0.10)"; // 无数据时段
 
 const DOW_LABELS: Record<number, string> = {
   1: "周日",
@@ -54,10 +49,23 @@ export function SectionHabits({ snapshot }: Props) {
     const found = habits.hourly.find((h) => h.hour === hour);
     return { hour, cnt: found?.cnt || 0 };
   });
+
+  // 找出创作高峰
+  const peakHour = hourly.reduce(
+    (max, d) => (d.cnt > max.cnt ? d : max),
+    hourly[0]
+  );
+
+  // 给每根柱子染色：cnt=0 → 灰；cnt 是 peak → 亮紫；其他 → 紫蓝
   const hourlyData = hourly.map((d) => ({
     label: `${d.hour}`,
     cnt: d.cnt,
-    color: hourlyColor(d.hour),
+    color:
+      d.cnt === 0
+        ? BAR_COLOR_EMPTY
+        : d.cnt === peakHour.cnt && peakHour.cnt > 0
+          ? BAR_COLOR_PEAK
+          : BAR_COLOR_NORMAL,
   }));
 
   // 工作日 1-7 补齐
@@ -72,11 +80,6 @@ export function SectionHabits({ snapshot }: Props) {
   });
   const totalDow = dow.reduce((s, d) => s + d.cnt, 0) || 1;
 
-  // 找出创作高峰
-  const peakHour = hourly.reduce(
-    (max, d) => (d.cnt > max.cnt ? d : max),
-    hourly[0]
-  );
   const peakDow = dow.reduce(
     (max, d) => (d.cnt > max.cnt ? d : max),
     dow[0]
@@ -169,7 +172,7 @@ export function SectionHabits({ snapshot }: Props) {
             />
             <Bar dataKey="cnt" radius={[3, 3, 0, 0]}>
               {hourlyData.map((d, i) => (
-                <Bar key={i} dataKey="cnt" fill={d.color} />
+                <Cell key={i} fill={d.color} />
               ))}
             </Bar>
           </BarChart>
