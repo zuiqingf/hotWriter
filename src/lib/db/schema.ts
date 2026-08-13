@@ -58,6 +58,19 @@ export interface UsageLog {
   created_at: number;
 }
 
+export interface ArticleAnalysis {
+  id: number;
+  article_id: number;
+  payload: string;        // LLM 输出的完整 JSON（summary + gaps + suggestions + hotRefs）
+  model: string | null;
+  tokens_input: number;
+  tokens_output: number;
+  cost_cny: string | null;
+  duration_ms: number | null;
+  hot_refs: string | null;  // Tavily 原始结果快照 JSON
+  created_at: number;
+}
+
 // 数据库表创建 SQL（一次性建表，MySQL 8.0+）
 export const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS articles (
@@ -148,4 +161,19 @@ CREATE TABLE IF NOT EXISTS usage_logs (
   created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP())
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE INDEX idx_usage_created ON usage_logs(created_at);
+
+CREATE TABLE IF NOT EXISTS article_analyses (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  article_id INT NOT NULL,
+  payload LONGTEXT NOT NULL,
+  model VARCHAR(64),
+  tokens_input INT DEFAULT 0,
+  tokens_output INT DEFAULT 0,
+  cost_cny VARCHAR(32),
+  duration_ms INT,
+  hot_refs LONGTEXT,
+  created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  INDEX idx_article_analyses_article_created (article_id, created_at),
+  CONSTRAINT fk_aa_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `;

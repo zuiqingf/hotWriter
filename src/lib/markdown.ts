@@ -64,3 +64,25 @@ export function normalizeToHtml(content: string): string {
   if (!content) return "";
   return looksLikeHtml(content) ? content : mdToHtml(content);
 }
+
+/**
+ * 把 HTML 转成纯文本（给 LLM 喂正文用，节省 token）
+ *
+ * 实现：删 <style>/<script> → 标签替换成换行 → 解码常见 HTML entity → 折叠多换行
+ * 不引入 DOMParser，因为 Node 端没有；server / client 都能跑。
+ */
+export function stripHtml(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, "\n")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}

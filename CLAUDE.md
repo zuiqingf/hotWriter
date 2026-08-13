@@ -24,9 +24,10 @@ src/
 │   ├── library/              # 文章库
 │   ├── research/             # 调研（关键词 → 方向）
 │   ├── stats/                # 统计 dashboard
+│   ├── analysis/             # 创作分析 dashboard
 │   └── write/[id]/           # 写作编辑器
 ├── components/               # React 组件（按域分目录）
-│   ├── library/ stats/ write/  # 域专用组件
+│   ├── library/ stats/ analysis/ write/  # 域专用组件
 │   └── nav/ home/ Toast/ Markdown/ RichEditor  # 通用
 ├── lib/                      # 业务逻辑层
 │   ├── cost/                 # token / 成本统计
@@ -36,6 +37,7 @@ src/
 │   ├── llm/                  # LLM agent（auto-write / chat / ai-edit）
 │   ├── search/               # 调研用搜索（Tavily）
 │   ├── stats/                # stats 页 SQL
+│   ├── analysis/             # analysis 页 SQL + Tavily + LLM 对比
 │   └── markdown.ts utils.ts  # 工具
 ```
 
@@ -59,6 +61,8 @@ src/
 | `/api/articles/[id]/ai-edit` | 选区改写（polish / expand / shorten） |
 | `/api/articles/[id]/check-compliance` | 合规校验 |
 | `/api/articles/[id]/generate` | 一次性全文（老接口） |
+| `/api/articles/[id]/analyze` | **单篇 SSE 对比分析**（start / delta / sections / suggestions / complete） |
+| `/api/articles/[id]/analysis` | 拉最近一次分析历史（"查看分析" 用） |
 | `/api/research` | 调研（搜资料 + 出方向） |
 | `/api/hot` | 热点抓取 |
 | `/api/upload` | 文件上传 |
