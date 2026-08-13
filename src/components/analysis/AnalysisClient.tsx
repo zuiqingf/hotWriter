@@ -3,18 +3,19 @@
 /**
  * AnalysisClient — /analysis 页 client 容器
  *
- * 接 server component 传来的 AnalysisSnapshot，按状态路由：
+ * 接 server component 传来的 AnalysisSnapshot，渲染：
  *   - 0 篇 → EmptyHint
  *   - 否则 → SectionHabits + SectionDirections + SectionArticles
- *   - 用户点「分析 / 重新分析」→ 走 SSE → AnalysisProgress / AnalysisPanel
- *   - 用户点「查看分析」→ 读 /api/articles/[id]/analysis → 显示 AnalysisPanel
+ *
+ * 文章列表里点「查看分析 / 重新分析」→ 走 SSE → ArticleProgress / Cache →
+ * SectionArticles 就地把 AnalysisPanel 渲染在该 li 下方。
  *
  * 关键状态：
  *   - analyzingId: 正在 SSE 流式的目标 article id
  *   - expandedId: 当前展开的"查看分析"目标
- *   - progressDelta: 流式进度文本
- *   - currentPayload: 完成后显示的 payload
- *   - errorMsg: 流式错误
+ *   - cache: 已完成分析（流式完成后 + 历史拉取后）
+ *   - progress: 流式进行中（按 articleId 索引）
+ *   - errors: 流式 / 加载历史错误
  */
 
 import { useState, useCallback, useRef } from "react";
@@ -22,9 +23,11 @@ import { useRouter } from "next/navigation";
 import type { AnalysisSnapshot } from "@/lib/analysis/queries";
 import { SectionHabits } from "./SectionHabits";
 import { SectionDirections } from "./SectionDirections";
-import { SectionArticles } from "./SectionArticles";
-import { AnalysisProgress } from "./AnalysisProgress";
-import { AnalysisPanel, AnalysisPanelPayload } from "./AnalysisPanel";
+import {
+  SectionArticles,
+  type ArticleProgress,
+} from "./SectionArticles";
+import { AnalysisPanelPayload } from "./AnalysisPanel";
 import { apiUrl } from "@/lib/utils";
 
 interface Props {
@@ -45,15 +48,11 @@ export function AnalysisClient({ snapshot }: Props) {
   const router = useRouter();
   const { hasAnyArticle } = snapshot;
 
-  // 展开的文章分析结果（按 articleId 缓存）
   const [cache, setCache] = useState<Record<number, CachedAnalysis>>({});
+  const [progress, setProgress] = useState<Record<number, ArticleProgress>>({});
+  const [errors, setErrors] = useState<Record<number, string>>({});
   const [analyzingId, setAnalyzingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [progressDelta, setProgressDelta] = useState("");
-  const [progressStage, setProgressStage] = useState<
-    "fetch" | "search" | "thinking" | "done"
-  >("fetch");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // SSE reader 引用（用于 abort）
   const abortRef = useRef<AbortController | null>(null);
@@ -71,9 +70,14 @@ export function AnalysisClient({ snapshot }: Props) {
 
       setAnalyzingId(articleId);
       setExpandedId(articleId);
-      setErrorMsg(null);
-      setProgressDelta("准备开始…");
-      setProgressStage("fetch");
+      setErrors((e) => {
+        const { [articleId]: _, ...rest } = e;
+        return rest;
+      });
+      setProgress((p) => ({
+        ...p,
+        [articleId]: { deltaText: "准备开始…", stage: "fetch" },
+      }));
 
       try {
         const res = await fetch(apiUrl(`/api/articles/${articleId}/analyze`), {
@@ -116,13 +120,20 @@ export function AnalysisClient({ snapshot }: Props) {
             }
 
             if (eventName === "start") {
-              setProgressDelta("✅ 已建立连接，开始拉取文章…");
-              setProgressStage("fetch");
+              setProgress((p) => ({
+                ...p,
+                [articleId]: { deltaText: "✅ 已建立连接，开始拉取文章…", stage: "fetch" },
+              }));
             } else if (eventName === "delta") {
-              setProgressDelta(payload.text || "");
-              if ((payload.text || "").includes("搜索")) setProgressStage("search");
-              else if ((payload.text || "").includes("差距") || (payload.text || "").includes("分析")) setProgressStage("thinking");
-              else if ((payload.text || "").includes("完成")) setProgressStage("done");
+              const text = payload.text || "";
+              let stage: ArticleProgress["stage"] = "thinking";
+              if (text.includes("搜索")) stage = "search";
+              else if (text.includes("差距") || text.includes("分析")) stage = "thinking";
+              else if (text.includes("完成")) stage = "done";
+              setProgress((p) => ({
+                ...p,
+                [articleId]: { deltaText: text, stage },
+              }));
             } else if (eventName === "sections") {
               partialPayload = {
                 summary: payload.summary || "",
@@ -169,8 +180,10 @@ export function AnalysisClient({ snapshot }: Props) {
                   },
                 },
               }));
-              setProgressDelta("✅ 完成");
-              setProgressStage("done");
+              setProgress((p) => {
+                const { [articleId]: _, ...rest } = p;
+                return rest;
+              });
               // 刷新 server 数据（更新 analyzed_at 时间戳 + 列表状态）
               router.refresh();
             } else if (eventName === "error") {
@@ -181,7 +194,11 @@ export function AnalysisClient({ snapshot }: Props) {
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("[analysis] SSE 失败:", err);
-        setErrorMsg(err.message || "分析失败");
+        setErrors((e) => ({ ...e, [articleId]: err.message || "分析失败" }));
+        setProgress((p) => {
+          const { [articleId]: _, ...rest } = p;
+          return rest;
+        });
       } finally {
         setAnalyzingId(null);
       }
@@ -200,7 +217,10 @@ export function AnalysisClient({ snapshot }: Props) {
         return;
       }
       setExpandedId(articleId);
-      setErrorMsg(null);
+      setErrors((e) => {
+        const { [articleId]: _, ...rest } = e;
+        return rest;
+      });
 
       if (cache[articleId]) return; // 已缓存
 
@@ -209,7 +229,7 @@ export function AnalysisClient({ snapshot }: Props) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!data.payload) {
-          setErrorMsg("暂无历史分析");
+          setErrors((e) => ({ ...e, [articleId]: "暂无历史分析" }));
           return;
         }
         setCache((c) => ({
@@ -226,13 +246,13 @@ export function AnalysisClient({ snapshot }: Props) {
         }));
       } catch (err: any) {
         console.error("[analysis] 加载历史失败:", err);
-        setErrorMsg(err.message || "加载历史失败");
+        setErrors((e) => ({ ...e, [articleId]: err.message || "加载历史失败" }));
       }
     },
     [cache, expandedId]
   );
 
-  // 0 篇 → 空态
+  // 0 篇 → 空态（仍展示 habits/directions/articles 但提示去写一篇）
   if (!hasAnyArticle) {
     return (
       <div className="space-y-6">
@@ -242,39 +262,12 @@ export function AnalysisClient({ snapshot }: Props) {
           snapshot={snapshot}
           analyzingId={analyzingId}
           expandedId={expandedId}
+          cache={cache}
+          progress={progress}
+          errors={errors}
           onAnalyze={handleAnalyze}
           onView={handleView}
         />
-        {expandedId && (analyzingId === expandedId || cache[expandedId]) && (
-          <div className="stat-tile">
-            <h3 className="font-semibold text-white mb-3">📊 分析结果</h3>
-            {analyzingId === expandedId && !cache[expandedId] && (
-              <AnalysisProgress deltaText={progressDelta} stage={progressStage} />
-            )}
-            {cache[expandedId] && (
-              <AnalysisPanel
-                title={
-                  snapshot.recentArticles.find((a) => a.id === expandedId)?.title ||
-                  ""
-                }
-                payload={cache[expandedId].payload}
-                meta={cache[expandedId].meta}
-              />
-            )}
-            {errorMsg && (
-              <div
-                className="rounded-xl p-4 text-sm"
-                style={{
-                  background: "rgba(239, 68, 68, 0.08)",
-                  border: "1px solid rgba(239, 68, 68, 0.25)",
-                  color: "#FCA5A5",
-                }}
-              >
-                ❌ {errorMsg}
-              </div>
-            )}
-          </div>
-        )}
         <div
           className="rounded-xl p-8 text-center"
           style={{
@@ -303,47 +296,12 @@ export function AnalysisClient({ snapshot }: Props) {
         snapshot={snapshot}
         analyzingId={analyzingId}
         expandedId={expandedId}
+        cache={cache}
+        progress={progress}
+        errors={errors}
         onAnalyze={handleAnalyze}
         onView={handleView}
       />
-
-      {/* 展开的分析结果区 */}
-      {expandedId && (
-        <div className="stat-tile">
-          <h3 className="font-semibold text-white mb-3">
-            📊 分析结果 ·{" "}
-            {snapshot.recentArticles.find((a) => a.id === expandedId)?.title}
-          </h3>
-
-          {errorMsg && (
-            <div
-              className="rounded-xl p-4 text-sm mb-3"
-              style={{
-                background: "rgba(239, 68, 68, 0.08)",
-                border: "1px solid rgba(239, 68, 68, 0.25)",
-                color: "#FCA5A5",
-              }}
-            >
-              ❌ {errorMsg}
-            </div>
-          )}
-
-          {analyzingId === expandedId && !cache[expandedId] && (
-            <AnalysisProgress deltaText={progressDelta} stage={progressStage} />
-          )}
-
-          {cache[expandedId] && (
-            <AnalysisPanel
-              title={
-                snapshot.recentArticles.find((a) => a.id === expandedId)?.title ||
-                ""
-              }
-              payload={cache[expandedId].payload}
-              meta={cache[expandedId].meta}
-            />
-          )}
-        </div>
-      )}
     </div>
   );
 }
