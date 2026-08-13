@@ -12,6 +12,7 @@ import { SectionKpi } from "./SectionKpi";
 import { SectionTrend } from "./SectionTrend";
 import { SectionStyle } from "./SectionStyle";
 import { SectionTokens } from "./SectionTokens";
+import { SectionTavily } from "./SectionTavily";
 import { EmptyHint } from "./EmptyHint";
 
 interface Props {
@@ -41,6 +42,7 @@ export function StatsClient({ snapshot }: Props) {
       ) : (
         <EmptyHint variant="no-logs" />
       )}
+      <SectionTavily snapshot={snapshot} />
     </div>
   );
 }

@@ -54,6 +54,20 @@ export interface StatsSnapshot {
       cost: number;
     }>;
   };
+  /** 调研阶段工具调用统计（从 research_log JSON 聚合） */
+  tavilyStats: {
+    sessions: number;        // 调研会话数
+    totalCalls: number;      // 总调用次数
+    byTool: {
+      web_search: number;    // Tavily
+      search_zhihu: number;
+      search_xiaohongshu: number;
+      fetch_url: number;
+      other: number;
+    };
+    /** 最近 N 个 Tavily 搜索关键词 */
+    recentQueries: { query: string; ts: number }[];
+  };
   hasAnyArticle: boolean;
   hasAnyLog: boolean;
 }
@@ -77,6 +91,7 @@ export async function getStatsSnapshot(
     styleRows,
     tokensTotalRow,
     tokensByActionRows,
+    tavilySessionRows,
   ] = await Promise.all([
     // ① KPI
     db.get<{
@@ -183,6 +198,16 @@ export async function getStatsSnapshot(
        ORDER BY cost DESC`,
       [range.sinceTs]
     ),
+
+    // ⑥ 调研工具调用（从 research_log JSON 聚合）
+    db.all<{ research_log: string | null; created_at: number }>(
+      `SELECT research_log, created_at
+       FROM research_sessions
+       WHERE created_at >= ? AND research_log IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [range.sinceTs]
+    ),
   ]);
 
   // ============ 后处理 ============
@@ -239,6 +264,54 @@ export async function getStatsSnapshot(
     cost: Number(r.cost),
   }));
 
+  // ============ Tavily / 调研工具统计 ============
+  // research_log 是 [{type, tool, args, message, timestamp}, ...] 的 JSON 数组
+  // 用它聚合 Tavily / 知乎 / 小红书 / fetch_url 调用次数
+  type StepEntry = { type?: string; tool?: string; args?: { query?: string }; timestamp?: number };
+  const byTool = {
+    web_search: 0, // Tavily
+    search_zhihu: 0,
+    search_xiaohongshu: 0,
+    fetch_url: 0,
+    other: 0,
+  };
+  let totalCalls = 0;
+  const recentQueries: { query: string; ts: number }[] = [];
+  for (const row of tavilySessionRows) {
+    if (!row.research_log) continue;
+    let steps: StepEntry[] = [];
+    try {
+      steps = JSON.parse(row.research_log);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(steps)) continue;
+    for (const s of steps) {
+      if (s?.type !== "search") continue;
+      totalCalls += 1;
+      const tool = s.tool || "other";
+      if (tool in byTool) {
+        (byTool as any)[tool] += 1;
+      } else {
+        byTool.other += 1;
+      }
+      // 收集 Tavily 的 query（按时间倒序去重）
+      if (tool === "web_search" && s.args?.query) {
+        const ts = s.timestamp || row.created_at;
+        if (!recentQueries.some((q) => q.query === s.args!.query)) {
+          recentQueries.push({ query: s.args.query, ts });
+        }
+      }
+    }
+  }
+  recentQueries.sort((a, b) => b.ts - a.ts);
+  const tavilyStats = {
+    sessions: tavilySessionRows.length,
+    totalCalls,
+    byTool,
+    recentQueries: recentQueries.slice(0, 8),
+  };
+
   return {
     range,
     kpi: { total, drafts, archived, avgWords, lastCreatedAt },
@@ -252,6 +325,7 @@ export async function getStatsSnapshot(
     trend,
     style,
     tokens: { totalIn, totalOut, totalCost: totalTokenCost, byAction },
+    tavilyStats,
     hasAnyArticle: total > 0,
     hasAnyLog: logCount > 0,
   };
