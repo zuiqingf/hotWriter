@@ -28,6 +28,8 @@ HotWriter 是一个**非商业、个人用**的 PC Web 应用，帮用户基于"
 - **调研页**（`/research`）：LLM Agent 自动多轮调研，产出 3-5 个差异化写作方向
 - **工作台**（`/write/[id]`）：双栏布局——左侧对话（与 AI 讨论）、右侧富文本编辑器（AI 写作 + 人工润色）
 - **素材库**（`/library`）：历史文章列表
+- **统计页**（`/stats`）：KPI / 月度趋势 / 风格分布 / Token 用量 / 调研工具调用分布
+- **分析页**（`/analysis`）：创作习惯 + 同赛道爆款对比 + 4 维差距评分 + 可执行改稿建议
 - **个人页**（`/profile`）：账号设置
 
 ### 1.2 核心能力
@@ -35,11 +37,13 @@ HotWriter 是一个**非商业、个人用**的 PC Web 应用，帮用户基于"
 | 能力 | 实现 |
 |------|------|
 | 热点抓取 | 4 平台 HTML 解析 + 第三方聚合站 |
-| 智能调研 | DeepSeek Agent + Tavily 搜索 + 多工具调用 |
+| 智能调研 | DeepSeek Agent + 7 个工具（通用 Web / 知乎 / 小红书 / 百度 / 头条 / 微信 / fetch_url） |
 | 富文本编辑 | Tiptap（ProseMirror）+ 斜杠菜单 / 气泡工具栏 |
 | AI 写作 | 整篇自动写 + 选区润色/扩写/缩写/改语气/翻译 |
 | 合规校验 | 内置 4 平台规则库 + LLM 严格审查 |
 | 多平台适配 | 知乎 / 小红书 / 头条 / 公众号 风格重写 |
+| 统计 / 成本 | `/stats` 6 张 SQL 并发 + recharts 暗色玻璃 |
+| 创作分析 | `/analysis` Tavily 同赛道搜索 + LLM 4 维差距 + 可执行建议 |
 
 ---
 
@@ -51,7 +55,7 @@ HotWriter 是一个**非商业、个人用**的 PC Web 应用，帮用户基于"
 | **语言** | TypeScript 5.7 | 类型安全 |
 | **UI** | React 18.3 + Tailwind 3.4 | 极简 className 体系 |
 | **LLM** | DeepSeek API（OpenAI 兼容）| 国产、价格低、中文好 |
-| **搜索** | Tavily API | AI 友好的网页搜索 |
+| **搜索** | Tavily API | AI 友好的网页搜索；通用搜索 + 6 个平台站内限定（知乎 / 小红书 / 百度 / 头条 / 微信） |
 | **数据库** | MySQL 8.0（mysql2/promise 连接池） | 与 OnePlatform 共用实例 `47.111.1.180:3306`、阿里云 RDS 同款、个人项目无需再起 SQLite 进程 |
 | **编辑器** | Tiptap 2.10（基于 ProseMirror）| 框架成熟、扩展丰富 |
 | **MD ↔ HTML** | marked 14 + turndown 7 | marked 转 HTML（写入）、turndown 转 MD（导出）|
@@ -94,13 +98,15 @@ hotwriter/
 ├── src/
 │   ├── app/
 │   │   ├── api/                  # 后端 API Routes
-│   │   │   ├── articles/         # 单文章 CRUD + chat + auto-write + ai-edit + check-compliance
+│   │   │   ├── articles/         # CRUD + chat + auto-write + ai-edit + check-compliance + analyze
 │   │   │   ├── hot/              # 热搜抓取
 │   │   │   ├── research/         # 关键词调研
 │   │   │   └── upload/           # 图片上传
 │   │   ├── research/             # 调研结果页
 │   │   ├── write/[id]/           # 工作台（双栏）
 │   │   ├── library/              # 文章库
+│   │   ├── stats/                # 统计 dashboard（KPI / 趋势 / 风格 / Token / 调研工具）
+│   │   ├── analysis/             # 创作分析 dashboard（习惯 + 同赛道对比 + 改稿建议）
 │   │   ├── profile/              # 个人中心
 │   │   ├── layout.tsx
 │   │   ├── page.tsx              # 首页
@@ -109,17 +115,20 @@ hotwriter/
 │   │   ├── RichEditor.tsx        # Tiptap 编辑器（440 行）
 │   │   ├── Markdown.tsx          # 简单 Markdown 渲染（只读场景）
 │   │   ├── Toast.tsx             # Toast 提示系统
-│   │   └── home/                 # 首页相关
-│   │       ├── HeroSearch.tsx
-│   │       └── HotList.tsx
+│   │   ├── nav/                  # Header
+│   │   ├── home/                 # 首页相关
+│   │   ├── library/ stats/ analysis/ write/  # 域专用组件
+│   │   └── RichEditor + Markdown + Toast      # 通用
 │   ├── lib/
-│   │   ├── db/                   # 数据库封装
-│   │   ├── llm/                  # LLM Agent + Prompt
+│   │   ├── db/                   # 数据库封装 + schema
+│   │   ├── llm/                  # LLM Agent + Prompt + tools
 │   │   ├── hot/                  # 热搜抓取 + 关键词提炼
-│   │   ├── search/               # Tavily / 知乎 / 小红书 搜索封装
+│   │   ├── search/               # tavily + 平台站内搜索（zhihu/xhs/baidu/toutiao/wechat）
+│   │   ├── stats/                # /stats SQL + range 解析
+│   │   ├── analysis/             # /analysis SQL + Tavily 对比 + LLM prompt
 │   │   ├── cost/                 # 用量统计
-│   │   ├── editor/tippy.ts       # 极简 tippy 实现
-│   │   ├── markdown.ts           # MD ↔ HTML 转换
+│   │   ├── editor/               # Tiptap 配置 + 极简 tippy
+│   │   ├── markdown.ts           # MD ↔ HTML 转换 + stripHtml
 │   │   └── utils.ts              # 时间格式化、字数统计等
 │   └── middleware.ts             # （空，预留）
 ├── Dockerfile                    # 多阶段构建：builder 跑 next build，runner 跑 next start
@@ -156,7 +165,8 @@ for (let round = 0; round < MAX_ROUNDS; round++) {
   // LLM 没调工具 → 输出最终 JSON
   if (!msg.tool_calls) break;
   
-  // 执行工具调用（web_search / fetch_url / search_zhihu / search_xiaohongshu）
+  // 执行工具调用（web_search / fetch_url / search_zhihu / search_xiaohongshu /
+  //                  search_baidu / search_toutiao / search_wechat）
   for (const toolCall of msg.tool_calls) {
     const result = await executeTool(toolCall);
     messages.push({ role: "tool", tool_call_id, content: result });
@@ -307,6 +317,56 @@ const db = {
 
 **密码特殊字符**：`DATABASE_URL` 中如果密码含 `#` 等保留字，必须 URL-encode（`#` → `%23`），否则会被解析为 fragment 截断。
 
+### 4.7 统计页（`/stats`）
+
+RSC（`force-dynamic`）并发 7 条 SQL → 装配 `StatsSnapshot` → 5 个 section 渲染：
+
+| Section | 数据 | 渲染 |
+|---|---|---|
+| SectionKpi | 总数 / 草稿 / 归档 / 平均字数 / 最近 | 3 张 stat-tile |
+| SectionTrend | 月度趋势（`%Y-%m` 分组） | recharts BarChart |
+| SectionStyle | 风格分布 | recharts PieChart |
+| SectionTokens | Token 用量 + 按 action 拆分 | 列表 + BarChart |
+| SectionTavily | 调研工具调用分布 | KPI 3 件套 + 4~7 类工具饼图 + 最近 Tavily 关键词 |
+
+**Tavily 统计的特殊处理**：不存新表，从 `research_sessions.research_log`（JSON 数组）后处理聚合。Step 形如 `{type:"search", tool:"web_search"|"search_zhihu"|..., args:{query}}`，按 tool 计数 + 按时间倒序取最近 8 条 `query`。
+
+### 4.8 创作分析页（`/analysis`）
+
+两段式：
+
+1. **静态画像**（纯 SQL，无需 LLM）：24h 时段柱图 + 周分布 + 频率统计
+2. **单篇同赛道对比**（按需触发）：点文章列表的「重新分析」→ SSE 流式 → Tavily 搜同关键词 → LLM 4 维差距评分 → 写 `article_analyses` 落库
+
+4 维差距：`title` / `hook` / `structure` / `materials`，每维 0-100 分 + issue + suggestion。LLM 输出的 `hotRefs` 用 Tavily 真实 URL 集做交集过滤，避免瞎编 URL。
+
+SSE 协议：
+
+```
+event: start       data: { articleId, title }
+event: delta       data: { text }              # 进度文本
+event: sections    data: { summary, gaps }
+event: suggestions data: { items: [...] }
+event: complete    data: { analysisId, payload, hotRefs, usage }
+event: error       data: { message }
+```
+
+### 4.9 平台站内搜索（[src/lib/search/zhihu.ts](src/lib/search/zhihu.ts)）
+
+7 个搜索工具全部走 Tavily + `site:<domain>` 限定符，避免对知乎 / 小红书 / 百度 / 头条 / 微信公众号的官方 API 门槛：
+
+| 工具 | site 限定 | 适用 |
+|---|---|---|
+| `web_search` | （无） | 通用 |
+| `search_zhihu` | `site:zhihu.com` | 大众经验、深度讨论 |
+| `search_xiaohongshu` | `site:xiaohongshu.com` | 生活方式、消费趋势 |
+| `search_baidu` | `site:baidu.com` | 权威百科、政策解读、时效新闻（含百度知道 / 百家号） |
+| `search_toutiao` | `site:toutiao.com` | 资讯首发、热点时效 |
+| `search_wechat` | `site:mp.weixin.qq.com` | 深度观点、行业分析 |
+| `fetch_url` | （直接抓） | 读已搜到的 URL 正文 |
+
+LLM 按场景路由：工信部 / 广告法 → 百度；热点首发 → 头条；深度分析 → 微信；大众讨论 → 知乎。烟囱测试（"小米 SU7 车祸事件"）验证 LLM 正确按场景触发不同工具。
+
 ---
 
 ## 5. 数据流
@@ -366,7 +426,7 @@ write page loadArticle() → fetch /api/articles/[id]
 ## 6. 数据库 schema
 
 数据库：MySQL 8.0（实例 `47.111.1.180:3306`，库名 `db_hotwriter`，与 OnePlatform 共用实例）。
-完整 DDL 在 [src/lib/db/schema.ts](src/lib/db/schema.ts)。共 6 张表：`articles` / `article_versions` / `chat_messages` / `research_sessions` / `hot_topics` / `usage_logs`。
+完整 DDL 在 [src/lib/db/schema.ts](src/lib/db/schema.ts)。共 7 张表：`articles` / `article_versions` / `chat_messages` / `research_sessions` / `article_analyses` / `hot_topics` / `usage_logs`。
 
 ### articles
 
@@ -430,6 +490,27 @@ CREATE TABLE research_sessions (
   CONSTRAINT fk_sessions_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+### article_analyses
+
+```sql
+CREATE TABLE article_analyses (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  article_id INT NOT NULL,
+  payload LONGTEXT NOT NULL,          -- JSON: { summary, gaps:{title,hook,structure,materials}, suggestions, hotRefs }
+  model VARCHAR(64),
+  tokens_input INT DEFAULT 0,
+  tokens_output INT DEFAULT 0,
+  cost_cny VARCHAR(32),
+  duration_ms INT,
+  hot_refs LONGTEXT,                 -- JSON: Tavily 搜索结果快照（防止 URL 过期后无法复现）
+  created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  INDEX idx_article_analyses_article_created (article_id, created_at DESC),
+  CONSTRAINT fk_analyses_article FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+> `/analysis` 页点「重新分析」每次都 INSERT 新行；通过 `MAX(created_at)` 拿每篇 latest。
 
 ### chat_messages
 

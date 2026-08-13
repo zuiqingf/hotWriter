@@ -10,9 +10,13 @@
 
 ### 调研 + 写作
 - 🔍 **关键词 Agent 调研**：自动调搜索工具（最多 8 轮），输出 3–5 个写作方向
+  - **6 个搜索工具**：通用 Web（Tavily）/ 知乎 / 小红书 / 百度 / 今日头条 / 微信公众号
+  - LLM 按场景自主路由（首发资讯→头条，权威源→百度，深度分析→微信，大众经验→知乎）
 - ✍️ **AI 初稿生成**：基于选定的方向、提纲、素材生成 Markdown 初稿
 - 💬 **多轮 AI 对话**：写作工坊左栏对话，对文章做修改、润色、扩写
 - 📚 **作品库**：所有文章持久化到 MySQL（远端实例 `47.111.1.180:3306/db_hotwriter`）
+- 📊 **统计 dashboard**（`/stats`）：KPI / 月度趋势 / 风格分布 / Token 用量 / 调研工具调用分布
+- 🧠 **创作分析**（`/analysis`）：时段习惯 + 同赛道对比 + 4 维差距评分 + 可执行改稿建议
 - 💰 **成本追踪**：每次 LLM 调用的费用都记录
 - 🔄 **自动保存**：编辑过程防丢失，每 1.5 秒 debounce 保存
 
@@ -124,35 +128,41 @@ bash scripts/deploy.sh
 hotwriter/
 ├── src/
 │   ├── app/                    # Next.js App Router
-│   │   ├── page.tsx           # 首页（关键词入口）
+│   │   ├── page.tsx           # 首页（关键词入口 + 4 平台热搜）
 │   │   ├── research/page.tsx  # 调研进度 + 方向选择
-│   │   ├── write/[id]/page.tsx # 写作工坊
+│   │   ├── write/[id]/page.tsx # 写作工坊（双栏）
 │   │   ├── library/page.tsx   # 作品库
+│   │   ├── stats/page.tsx     # 统计 dashboard
+│   │   ├── analysis/page.tsx  # 创作分析 dashboard
 │   │   └── api/               # 后端路由
 │   │       ├── research/      # Agent 调研（SSE）
-│   │       ├── articles/      # 文章 CRUD
+│   │       ├── hot/           # 热搜抓取
+│   │       ├── upload/        # 图片上传
+│   │       ├── articles/      # 文章列表 / 批量创建
 │   │       └── articles/[id]/
 │   │           ├── chat/      # 多轮对话（SSE）
-│   │           └── generate/  # 初稿生成
+│   │           ├── auto-write/ # 流式自动写（SSE）
+│   │           ├── ai-edit/   # 选区改写（SSE）
+│   │           ├── check-compliance/ # 合规校验
+│   │           ├── analyze/   # 单篇同赛道对比分析（SSE）
+│   │           └── analysis/  # 拉最近一次分析历史
 │   ├── components/
 │   │   ├── nav/Header.tsx
-│   │   └── home/HeroSearch.tsx
+│   │   ├── home/HeroSearch.tsx + HotList.tsx
+│   │   ├── RichEditor.tsx     # Tiptap 编辑器
+│   │   ├── stats/             # /stats 用的 section 组件
+│   │   ├── analysis/          # /analysis 用的 section 组件
+│   │   ├── library/ write/    # 域专用组件
+│   │   └── Toast / Markdown / RichEditor
 │   └── lib/
-│       ├── llm/
-│       │   ├── client.ts      # DeepSeek 客户端（OpenAI 兼容）
-│       │   ├── tools.ts       # Agent 工具定义
-│       │   ├── prompts.ts     # System prompts
-│       │   └── agent.ts       # Agent 主循环
-│       ├── search/
-│       │   ├── tavily.ts      # Tavily 搜索
-│       │   └── zhihu.ts       # 知乎/小红书/fetch
-│       ├── db/
-│       │   ├── schema.ts      # 6 张表定义（MySQL DDL）
-│       │   ├── index.ts       # mysql2 连接池 + async API
-│       │   ├── migrate.ts     # 初始化脚本（建库 + 建表）
-│       │   └── reset.ts       # DROP + CREATE DATABASE
+│       ├── llm/               # DeepSeek client + Agent 循环 + tools + prompts
+│       ├── search/            # tavily + 平台站内搜索（zhihu/xhs/baidu/toutiao/wechat）
+│       ├── stats/             # /stats SQL + range 解析
+│       ├── analysis/          # /analysis SQL + Tavily 对比 + LLM prompt
+│       ├── hot/               # 热搜抓取 + 关键词提炼
+│       ├── db/                # mysql2 连接池 + schema
 │       ├── cost/tracker.ts    # 成本追踪
-│       └── utils.ts
+│       └── markdown.ts utils.ts
 ├── scripts/deploy.sh          # 一键 Docker 部署到 180
 ├── Dockerfile
 ├── tailwind.config.ts
@@ -164,7 +174,8 @@ hotwriter/
 - `articles` - 文章主表
 - `article_versions` - 版本历史
 - `chat_messages` - 多轮对话历史 ⭐
-- `research_sessions` - 调研会话
+- `research_sessions` - 调研会话（含 `research_log` JSON 记录每步工具调用）
+- `article_analyses` - 单篇同赛道对比分析结果（`/analysis` 用）
 - `hot_topics` - 热点缓存（v0.5 启用）
 - `usage_logs` - 成本日志
 
